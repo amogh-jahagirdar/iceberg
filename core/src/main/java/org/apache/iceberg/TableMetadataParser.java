@@ -34,6 +34,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
+import org.apache.commons.compress.archivers.dump.UnsupportedCompressionAlgorithmException;
+import org.apache.commons.compress.compressors.zstandard.ZstdCompressorInputStream;
+import org.apache.commons.compress.compressors.zstandard.ZstdCompressorOutputStream;
 import org.apache.iceberg.TableMetadata.MetadataLogEntry;
 import org.apache.iceberg.TableMetadata.SnapshotLogEntry;
 import org.apache.iceberg.exceptions.RuntimeIOException;
@@ -50,7 +53,8 @@ public class TableMetadataParser {
 
   public enum Codec {
     NONE(""),
-    GZIP(".gz");
+    GZIP(".gz"),
+    ZSTD(".zst");
 
     private final String extension;
 
@@ -73,6 +77,8 @@ public class TableMetadataParser {
       String fileNameWithoutSuffix = fileName.substring(0, fileName.lastIndexOf(".metadata.json"));
       if (fileNameWithoutSuffix.endsWith(Codec.GZIP.extension)) {
         return Codec.GZIP;
+      } else if (fileNameWithoutSuffix.endsWith(Codec.ZSTD.extension)) {
+        return Codec.ZSTD;
       } else {
         return Codec.NONE;
       }
@@ -117,9 +123,9 @@ public class TableMetadataParser {
 
   public static void internalWrite(
       TableMetadata metadata, OutputFile outputFile, boolean overwrite) {
-    boolean isGzip = Codec.fromFileName(outputFile.location()) == Codec.GZIP;
+    Codec codec = Codec.fromFileName(outputFile.location());
     OutputStream stream = overwrite ? outputFile.createOrOverwrite() : outputFile.create();
-    try (OutputStream ou = isGzip ? new GZIPOutputStream(stream) : stream;
+    try (OutputStream ou = compressedOutputStream(codec, stream);
          OutputStreamWriter writer = new OutputStreamWriter(ou, StandardCharsets.UTF_8)) {
       JsonGenerator generator = JsonUtil.factory().createGenerator(writer);
       generator.useDefaultPrettyPrinter();
@@ -128,6 +134,18 @@ public class TableMetadataParser {
     } catch (IOException e) {
       throw new RuntimeIOException(e, "Failed to write json to file: %s", outputFile);
     }
+  }
+
+  private static OutputStream compressedOutputStream(Codec codec, OutputStream outputStream) throws IOException {
+    switch (codec) {
+      case NONE:
+        return outputStream;
+      case GZIP:
+        return new GZIPOutputStream(outputStream);
+      case ZSTD:
+        return new ZstdCompressorOutputStream(outputStream);
+    }
+    throw new UnsupportedOperationException(String.format("Codec %s not supported", codec));
   }
 
   public static String getFileExtension(String codecName) {
@@ -248,11 +266,23 @@ public class TableMetadataParser {
 
   public static TableMetadata read(FileIO io, InputFile file) {
     Codec codec = Codec.fromFileName(file.location());
-    try (InputStream is = codec == Codec.GZIP ? new GZIPInputStream(file.newStream()) : file.newStream()) {
+    try (InputStream is = compressedInputStream(codec, file.newStream())) {
       return fromJson(io, file, JsonUtil.mapper().readValue(is, JsonNode.class));
     } catch (IOException e) {
       throw new RuntimeIOException(e, "Failed to read file: %s", file);
     }
+  }
+
+  private static InputStream compressedInputStream(Codec codec, InputStream fileInputStream) throws IOException {
+    switch (codec) {
+      case NONE:
+        return fileInputStream;
+      case GZIP:
+        return new GZIPInputStream(fileInputStream);
+      case ZSTD:
+        return new ZstdCompressorInputStream(fileInputStream);
+    }
+    throw new UnsupportedOperationException(String.format("Codec %s not supported", codec));
   }
 
   /**
