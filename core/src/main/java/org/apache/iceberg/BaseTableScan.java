@@ -53,6 +53,10 @@ abstract class BaseTableScan extends BaseScan<TableScan, FileScanTask, CombinedS
     return context().snapshotId();
   }
 
+  protected String ref() {
+    return context().ref();
+  }
+
   protected Map<String, String> options() {
     return context().options();
   }
@@ -87,6 +91,8 @@ abstract class BaseTableScan extends BaseScan<TableScan, FileScanTask, CombinedS
     Preconditions.checkArgument(
         snapshotId() == null, "Cannot override snapshot, already set to id=%s", snapshotId());
     Preconditions.checkArgument(
+        ref() == null, "Cannot override snapshot, ref is already set to %s", ref());
+    Preconditions.checkArgument(
         tableOps().current().snapshot(scanSnapshotId) != null,
         "Cannot find snapshot with ID %s",
         scanSnapshotId);
@@ -95,11 +101,32 @@ abstract class BaseTableScan extends BaseScan<TableScan, FileScanTask, CombinedS
   }
 
   @Override
+  public TableScan useRef(String name) {
+    Preconditions.checkArgument(
+        snapshotId() == null, "Cannot override ref, snapshot is already set to %s", snapshotId());
+    Preconditions.checkArgument(ref() == null, "Cannot override ref, already set to %s", ref());
+    SnapshotRef ref = tableOps().current().ref(name);
+    Preconditions.checkArgument(ref != null, "Cannot find ref %s", ref());
+    long scanSnapshotId = ref.snapshotId();
+    return newRefinedScan(
+        tableOps(), table(), tableSchema(), context().useRef(name).useSnapshotId(scanSnapshotId));
+  }
+
+  @Override
   public TableScan asOfTime(long timestampMillis) {
     Preconditions.checkArgument(
-        snapshotId() == null, "Cannot override snapshot, already set to id=%s", snapshotId());
-
-    return useSnapshot(SnapshotUtil.snapshotIdAsOfTime(table(), timestampMillis));
+        snapshotId() == null || ref() != null,
+        "Cannot override snapshot, already set to id=%s",
+        snapshotId());
+    String ref = ref() == null ? SnapshotRef.MAIN_BRANCH : ref();
+    Preconditions.checkArgument(tableOps().current().ref(ref) != null, "Cannot find ref %s", ref);
+    Preconditions.checkArgument(
+        tableOps().current().ref(ref).isBranch(),
+        "Time travel is only supported for branches. %s is a tag",
+        ref);
+    long scanSnapshotId = SnapshotUtil.snapshotIdAsOfTime(table(), ref, timestampMillis);
+    return newRefinedScan(
+        tableOps(), table(), tableSchema(), context().useRef(ref).useSnapshotId(scanSnapshotId));
   }
 
   @Override

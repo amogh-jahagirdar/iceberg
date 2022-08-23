@@ -45,6 +45,7 @@ final class TableScanContext {
   private final ExecutorService planExecutor;
   private final boolean fromSnapshotInclusive;
   private final ScanReporter scanReporter;
+  private final String ref;
 
   TableScanContext() {
     this.snapshotId = null;
@@ -60,6 +61,7 @@ final class TableScanContext {
     this.planExecutor = null;
     this.fromSnapshotInclusive = false;
     this.scanReporter = new LoggingScanReporter();
+    this.ref = null;
   }
 
   private TableScanContext(
@@ -75,7 +77,8 @@ final class TableScanContext {
       Long toSnapshotId,
       ExecutorService planExecutor,
       boolean fromSnapshotInclusive,
-      ScanReporter scanReporter) {
+      ScanReporter scanReporter,
+      String ref) {
     this.snapshotId = snapshotId;
     this.rowFilter = rowFilter;
     this.ignoreResiduals = ignoreResiduals;
@@ -89,6 +92,7 @@ final class TableScanContext {
     this.planExecutor = planExecutor;
     this.fromSnapshotInclusive = fromSnapshotInclusive;
     this.scanReporter = scanReporter;
+    this.ref = ref;
   }
 
   Long snapshotId() {
@@ -109,7 +113,8 @@ final class TableScanContext {
         toSnapshotId,
         planExecutor,
         fromSnapshotInclusive,
-        scanReporter);
+        scanReporter,
+        ref);
   }
 
   Expression rowFilter() {
@@ -130,7 +135,8 @@ final class TableScanContext {
         toSnapshotId,
         planExecutor,
         fromSnapshotInclusive,
-        scanReporter);
+        scanReporter,
+        ref);
   }
 
   boolean ignoreResiduals() {
@@ -151,7 +157,8 @@ final class TableScanContext {
         toSnapshotId,
         planExecutor,
         fromSnapshotInclusive,
-        scanReporter);
+        scanReporter,
+        ref);
   }
 
   boolean caseSensitive() {
@@ -172,7 +179,8 @@ final class TableScanContext {
         toSnapshotId,
         planExecutor,
         fromSnapshotInclusive,
-        scanReporter);
+        scanReporter,
+        ref);
   }
 
   boolean returnColumnStats() {
@@ -193,7 +201,8 @@ final class TableScanContext {
         toSnapshotId,
         planExecutor,
         fromSnapshotInclusive,
-        scanReporter);
+        scanReporter,
+        ref);
   }
 
   Collection<String> selectedColumns() {
@@ -216,7 +225,8 @@ final class TableScanContext {
         toSnapshotId,
         planExecutor,
         fromSnapshotInclusive,
-        scanReporter);
+        scanReporter,
+        ref);
   }
 
   Schema projectedSchema() {
@@ -239,7 +249,8 @@ final class TableScanContext {
         toSnapshotId,
         planExecutor,
         fromSnapshotInclusive,
-        scanReporter);
+        scanReporter,
+        ref);
   }
 
   Map<String, String> options() {
@@ -263,7 +274,8 @@ final class TableScanContext {
         toSnapshotId,
         planExecutor,
         fromSnapshotInclusive,
-        scanReporter);
+        scanReporter,
+        ref);
   }
 
   Long fromSnapshotId() {
@@ -284,7 +296,8 @@ final class TableScanContext {
         toSnapshotId,
         planExecutor,
         false,
-        scanReporter);
+        scanReporter,
+        ref);
   }
 
   TableScanContext fromSnapshotIdInclusive(long id) {
@@ -301,7 +314,8 @@ final class TableScanContext {
         toSnapshotId,
         planExecutor,
         true,
-        scanReporter);
+        scanReporter,
+        ref);
   }
 
   boolean fromSnapshotInclusive() {
@@ -326,7 +340,8 @@ final class TableScanContext {
         id,
         planExecutor,
         fromSnapshotInclusive,
-        scanReporter);
+        scanReporter,
+        ref);
   }
 
   ExecutorService planExecutor() {
@@ -351,7 +366,8 @@ final class TableScanContext {
         toSnapshotId,
         executor,
         fromSnapshotInclusive,
-        scanReporter);
+        scanReporter,
+        ref);
   }
 
   ScanReporter scanReporter() {
@@ -372,6 +388,29 @@ final class TableScanContext {
         toSnapshotId,
         planExecutor,
         fromSnapshotInclusive,
-        reporter);
+        reporter,
+        ref);
+  }
+
+  public String ref() {
+    return ref;
+  }
+
+  TableScanContext useRef(String name) {
+    return new TableScanContext(
+        snapshotId,
+        rowFilter,
+        ignoreResiduals,
+        caseSensitive,
+        colStats,
+        projectedSchema,
+        selectedColumns,
+        options,
+        fromSnapshotId,
+        toSnapshotId,
+        planExecutor,
+        fromSnapshotInclusive,
+        scanReporter,
+        name);
   }
 }
