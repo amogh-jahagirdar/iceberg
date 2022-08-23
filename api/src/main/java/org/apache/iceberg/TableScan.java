@@ -39,6 +39,8 @@ public interface TableScan extends Scan<TableScan, FileScanTask, CombinedScanTas
    */
   TableScan useSnapshot(long snapshotId);
 
+  TableScan useRef(String ref);
+
   /**
    * Create a new {@link TableScan} from this scan's configuration that will use the most recent
    * snapshot as of the given time in milliseconds.

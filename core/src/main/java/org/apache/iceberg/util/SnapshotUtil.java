@@ -24,9 +24,9 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.Function;
 import org.apache.iceberg.DataFile;
-import org.apache.iceberg.HistoryEntry;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Snapshot;
+import org.apache.iceberg.SnapshotRef;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.iceberg.io.FileIO;
@@ -322,6 +322,41 @@ public class SnapshotUtil {
   }
 
   /**
+   * Returns the ID of the most recent snapshot on the given branch as of the given time in
+   * milliseconds
+   *
+   * @param table a {@link Table}
+   * @param branch a {@link String}
+   * @param timestampMillis the timestamp in millis since the Unix epoch
+   * @return the snapshot ID
+   * @throws IllegalArgumentException when no snapshot is found in the table, on the given branch
+   *     older than the timestamp
+   */
+  public static long snapshotIdAsOfTime(Table table, String branch, long timestampMillis) {
+    SnapshotRef ref = table.refs().get(branch);
+    Preconditions.checkArgument(ref != null, "Branch %s does not exist", branch);
+    Preconditions.checkArgument(ref.isBranch(), "Ref %s is a tag, not a branch", branch);
+    Long snapshotId = null;
+    long minimumTimeDifference = Long.MAX_VALUE;
+    for (Snapshot snapshot : ancestorsOf(ref.snapshotId(), table::snapshot)) {
+      if (snapshot.timestampMillis() <= timestampMillis) {
+        if (timestampMillis - snapshot.timestampMillis() <= minimumTimeDifference) {
+          minimumTimeDifference = timestampMillis - snapshot.timestampMillis();
+          snapshotId = snapshot.snapshotId();
+        }
+      }
+    }
+
+    Preconditions.checkArgument(
+        snapshotId != null,
+        "Cannot find a snapshot older than %s on branch %s",
+        DateTimeUtil.formatTimestampMillis(timestampMillis),
+        branch);
+
+    return snapshotId;
+  }
+
+  /**
    * Returns the ID of the most recent snapshot for the table as of the timestamp.
    *
    * @param table a {@link Table}
@@ -331,18 +366,7 @@ public class SnapshotUtil {
    *     timestamp
    */
   public static long snapshotIdAsOfTime(Table table, long timestampMillis) {
-    Long snapshotId = null;
-    for (HistoryEntry logEntry : table.history()) {
-      if (logEntry.timestampMillis() <= timestampMillis) {
-        snapshotId = logEntry.snapshotId();
-      }
-    }
-
-    Preconditions.checkArgument(
-        snapshotId != null,
-        "Cannot find a snapshot older than %s",
-        DateTimeUtil.formatTimestampMillis(timestampMillis));
-    return snapshotId;
+    return snapshotIdAsOfTime(table, SnapshotRef.MAIN_BRANCH, timestampMillis);
   }
 
   /**
