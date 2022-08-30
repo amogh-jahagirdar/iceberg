@@ -16,15 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.iceberg.view;
 
 import java.util.List;
 import java.util.Map;
 
-/**
- * Interface for view definition.
- */
+/** Interface for view definition. */
 public interface View {
 
   String name();

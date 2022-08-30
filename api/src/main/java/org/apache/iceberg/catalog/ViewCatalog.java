@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.iceberg.catalog;
 
 import java.util.List;
@@ -27,9 +26,7 @@ import org.apache.iceberg.exceptions.NotFoundException;
 import org.apache.iceberg.view.View;
 import org.apache.iceberg.view.ViewRepresentation;
 
-/**
- * A Catalog API for view create, drop, and load operations.
- */
+/** A Catalog API for view create, drop, and load operations. */
 public interface ViewCatalog {
 
   /**
@@ -108,8 +105,8 @@ public interface ViewCatalog {
 
   /**
    * Drop a view; optionally delete metadata files.
-   * <p>
-   * If purge is set to true the implementation should delete all metadata files.
+   *
+   * <p>If purge is set to true the implementation should delete all metadata files.
    *
    * @param identifier a view identifier
    * @param purge if true, delete all metadata files in the view
@@ -129,25 +126,23 @@ public interface ViewCatalog {
 
   /**
    * Invalidate cached view metadata from current catalog.
-   * <p>
-   * If the view is already loaded or cached, drop cached data.
-   * If the view does not exist or is not cached, do nothing.
+   *
+   * <p>If the view is already loaded or cached, drop cached data. If the view does not exist or is
+   * not cached, do nothing.
    *
    * @param identifier a view identifier
    */
-  default void invalidateView(TableIdentifier identifier) {
-  }
+  default void invalidateView(TableIdentifier identifier) {}
 
   /**
    * Initialize a view catalog given a custom name and a map of catalog properties.
-   * <p>
-   * A custom view catalog implementation must have a no-arg constructor.
-   * A compute engine like Spark or Flink will first initialize the catalog without any arguments,
-   * and then call this method to complete catalog initialization with properties passed into the engine.
+   *
+   * <p>A custom view catalog implementation must have a no-arg constructor. A compute engine like
+   * Spark or Flink will first initialize the catalog without any arguments, and then call this
+   * method to complete catalog initialization with properties passed into the engine.
    *
    * @param name a custom name for the catalog
    * @param properties catalog properties
    */
-  default void initialize(String name, Map<String, String> properties) {
-  }
+  default void initialize(String name, Map<String, String> properties) {}
 }

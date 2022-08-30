@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.iceberg.view;
 
 import java.util.List;
@@ -24,10 +23,10 @@ import java.util.Map;
 
 /**
  * A version of the view at a point in time.
- * <p>
- * A version consists of a view metadata file.
- * <p>
- * Versions are created by view operations, like Create and Replace.
+ *
+ * <p>A version consists of a view metadata file.
+ *
+ * <p>Versions are created by view operations, like Create and Replace.
  */
 public interface ViewVersion {
 
@@ -39,15 +38,16 @@ public interface ViewVersion {
 
   /**
    * Return this version's timestamp.
-   * <p>
-   * This timestamp is the same as those produced by {@link System#currentTimeMillis()}.
+   *
+   * <p>This timestamp is the same as those produced by {@link System#currentTimeMillis()}.
    *
    * @return a long timestamp in milliseconds
    */
   long timestampMillis();
 
   /**
-   * Returns the version summary such as the name of the operation that created that version of the view
+   * Returns the version summary such as the name of the operation that created that version of the
+   * view
    *
    * @return a version summary
    */
@@ -55,8 +55,8 @@ public interface ViewVersion {
 
   /**
    * Returns the list of view representations
-   * <p>
-   * Must contain at least one representation.
+   *
+   * <p>Must contain at least one representation.
    *
    * @return the list of view representations
    */

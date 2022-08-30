@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.iceberg.view;
 
 import java.util.Map;
@@ -24,18 +23,18 @@ import org.apache.iceberg.PendingUpdate;
 
 /**
  * API for updating view properties.
- * <p>
- * Apply returns the updated view properties as a map for validation.
- * <p>
- * When committing, these changes will be applied to the current view metadata.
- * Commit conflicts will be resolved by applying the pending changes to the new view metadata.
+ *
+ * <p>Apply returns the updated view properties as a map for validation.
+ *
+ * <p>When committing, these changes will be applied to the current view metadata. Commit conflicts
+ * will be resolved by applying the pending changes to the new view metadata.
  */
 public interface UpdateViewProperties extends PendingUpdate<Map<String, String>> {
 
   /**
    * Add a key/value property to the view.
    *
-   * @param key   a String key
+   * @param key a String key
    * @param value a String value
    * @return this for method chaining
    * @throws NullPointerException If either the key or value is null

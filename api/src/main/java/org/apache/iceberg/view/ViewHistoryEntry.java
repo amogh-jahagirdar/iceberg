@@ -16,23 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.iceberg.view;
 
 /**
  * View history entry.
- * <p>
- * An entry contains a change to the view state.
- * At the given timestamp, the current version was set to the given version ID.
+ *
+ * <p>An entry contains a change to the view state. At the given timestamp, the current version was
+ * set to the given version ID.
  */
 public interface ViewHistoryEntry {
-  /**
-   * Returns the timestamp in milliseconds of the change
-   */
+  /** Returns the timestamp in milliseconds of the change */
   long timestampMillis();
 
-  /**
-   * Returns ID of the new current version
-   */
+  /** Returns ID of the new current version */
   int versionId();
 }
