@@ -30,19 +30,12 @@ import java.util.Map;
  * Versions are created by view operations, like Create and Replace.
  */
 public interface ViewVersion {
-  /**
-   * Return this version's ID.
-   *
-   * @return a long ID
-   */
-  int versionId();
 
-  /**
-   * Return this version's parent ID or null.
-   *
-   * @return a long ID for this version's parent, or null if it has no parent
-   */
-  Integer parentId();
+  /** Returns this version's id. Version ids are monotonically increasing */
+  long versionId();
+
+  /** Returns this version's parent id or null if there is no parent */
+  Long parentId();
 
   /**
    * Return this version's timestamp.
@@ -54,7 +47,7 @@ public interface ViewVersion {
   long timestampMillis();
 
   /**
-   * Returns the version summary such as the name and genie-id of the operation that created that version of the view
+   * Returns the version summary such as the name of the operation that created that version of the view
    *
    * @return a version summary
    */

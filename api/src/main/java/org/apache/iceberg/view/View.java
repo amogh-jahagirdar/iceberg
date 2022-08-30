@@ -49,7 +49,7 @@ public interface View {
    * @param versionId version ID
    * @return a version, or null if the ID cannot be found
    */
-  ViewVersion version(int versionId);
+  ViewVersion version(long versionId);
 
   /**
    * Get the version history of this table.
