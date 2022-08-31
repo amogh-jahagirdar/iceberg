@@ -63,7 +63,7 @@ public interface View {
   Map<String, String> properties();
 
   /**
-   * Update view properties and commit the changes.
+   * Create a new {@link UpdateViewProperties} to update view properties and commit the changes.
    *
    * @return a new {@link UpdateViewProperties}
    */
