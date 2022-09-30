@@ -25,9 +25,10 @@ package org.apache.iceberg.view;
  * set to the given version ID.
  */
 public interface ViewHistoryEntry {
+
   /** Returns the timestamp in milliseconds of the change */
   long timestampMillis();
 
   /** Returns ID of the new current version */
-  int versionId();
+  long versionId();
 }
