@@ -20,6 +20,7 @@ package org.apache.iceberg.catalog;
 
 import java.util.List;
 import java.util.Map;
+import org.apache.iceberg.Schema;
 import org.apache.iceberg.exceptions.AlreadyExistsException;
 import org.apache.iceberg.exceptions.NoSuchViewException;
 import org.apache.iceberg.exceptions.NotFoundException;
@@ -58,7 +59,8 @@ public interface ViewCatalog {
    * Check whether view exists.
    *
    * @param identifier a view identifier
-   * @return true if the table exists, false otherwise
+   * @return true if the view exists, false otherwise
+   * @throws NoSuchViewException if the view does not exist
    */
   default boolean viewExists(TableIdentifier identifier) {
     try {
@@ -75,11 +77,40 @@ public interface ViewCatalog {
    * @param identifier a view identifier
    * @param representations a list of view representations
    * @param properties a string map of view properties
+   * @throws AlreadyExistsException if the view already exists
+   */
+  default View createView(
+      TableIdentifier identifier,
+      List<ViewRepresentation> representations,
+      Map<String, String> properties) {
+    return createView(identifier, null, representations, properties);
+  }
+
+  /**
+   * Create a view with the provided schema
+   *
+   * @param identifier a view identifier
+   * @param schema schema for the view
+   * @param representations a list of view representations
+   * @param properties a string map of view properties
+   * @throws AlreadyExistsException if the view already exists
    */
   View createView(
       TableIdentifier identifier,
+      Schema schema,
       List<ViewRepresentation> representations,
       Map<String, String> properties);
+
+  /**
+   * Updates the current view with new representations. New representations will replace existing
+   * representations of the same type and dialect. New representations with new types and dialects
+   * will be added to the current view representations.
+   *
+   * @param identifier a view identifier
+   * @param newRepresentations a list of the new representations
+   */
+  View updateViewRepresentations(
+      TableIdentifier identifier, List<ViewRepresentation> newRepresentations);
 
   /**
    * Replace a view.
