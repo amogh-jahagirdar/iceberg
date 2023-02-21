@@ -27,6 +27,7 @@ import org.apache.iceberg.IncrementalChangelogScan;
 import org.apache.iceberg.MetadataColumns;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Snapshot;
+import org.apache.iceberg.SnapshotRef;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.expressions.Binder;
@@ -39,6 +40,7 @@ import org.apache.iceberg.spark.Spark3Util;
 import org.apache.iceberg.spark.SparkFilters;
 import org.apache.iceberg.spark.SparkReadConf;
 import org.apache.iceberg.spark.SparkReadOptions;
+import org.apache.iceberg.spark.SparkSQLProperties;
 import org.apache.iceberg.spark.SparkSchemaUtil;
 import org.apache.iceberg.types.TypeUtil;
 import org.apache.iceberg.types.Types;
@@ -56,6 +58,7 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import scala.Option;
 
 public class SparkScanBuilder
     implements ScanBuilder,
@@ -265,6 +268,15 @@ public class SparkScanBuilder
       scan = scan.useRef(tag);
     }
 
+    if (scan.snapshot() == null) {
+      Option<String> writeBranchOption = spark.conf().getOption(SparkSQLProperties.BRANCH);
+      if (writeBranchOption.isDefined()) {
+        String writeBranch = writeBranchOption.get();
+        Preconditions.checkArgument(table.snapshot(writeBranch) != null, "Cannot find valid snapshot for target write branch %s", branch);
+        scan = scan.useSnapshot(table.snapshot(writeBranch).snapshotId());
+      }
+    }
+
     scan = configureSplitPlanning(scan);
 
     return new SparkBatchQueryScan(spark, table, scan, readConf, expectedSchema, filterExpressions);
@@ -390,7 +402,8 @@ public class SparkScanBuilder
         SparkReadOptions.START_SNAPSHOT_ID,
         SparkReadOptions.END_SNAPSHOT_ID);
 
-    Snapshot snapshot = table.currentSnapshot();
+    String branch = spark.conf().get(SparkSQLProperties.BRANCH, SnapshotRef.MAIN_BRANCH);
+    Snapshot snapshot = table.snapshot(branch);
 
     if (snapshot == null) {
       return new SparkBatchQueryScan(
@@ -421,7 +434,8 @@ public class SparkScanBuilder
   }
 
   public Scan buildCopyOnWriteScan() {
-    Snapshot snapshot = table.currentSnapshot();
+    String branch = spark.conf().get(SparkSQLProperties.BRANCH, SnapshotRef.MAIN_BRANCH);
+    Snapshot snapshot = table.snapshot(branch);
 
     if (snapshot == null) {
       return new SparkCopyOnWriteScan(
@@ -442,7 +456,7 @@ public class SparkScanBuilder
     scan = configureSplitPlanning(scan);
 
     return new SparkCopyOnWriteScan(
-        spark, table, scan, snapshot, readConf, expectedSchema, filterExpressions);
+        spark, table, scan, snapshot, readConf, expectedSchema, filterExpressions, branch);
   }
 
   private <T extends org.apache.iceberg.Scan<T, ?, ?>> T configureSplitPlanning(T scan) {

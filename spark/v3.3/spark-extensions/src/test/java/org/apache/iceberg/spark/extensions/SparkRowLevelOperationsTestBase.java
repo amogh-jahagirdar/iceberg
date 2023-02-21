@@ -43,6 +43,7 @@ import java.util.stream.Collectors;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.Files;
 import org.apache.iceberg.Snapshot;
+import org.apache.iceberg.SnapshotRef;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.parquet.GenericParquetWriter;
@@ -52,6 +53,7 @@ import org.apache.iceberg.parquet.Parquet;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.spark.SparkCatalog;
 import org.apache.iceberg.spark.SparkSessionCatalog;
+import org.apache.iceberg.spark.SparkWriteOptions;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoder;
 import org.apache.spark.sql.Encoders;
@@ -174,13 +176,18 @@ public abstract class SparkRowLevelOperationsTestBase extends SparkExtensionsTes
   }
 
   protected void createAndInitTable(String schema, String partitioning, String jsonData) {
+    createAndInitTable(schema, partitioning, jsonData, SnapshotRef.MAIN_BRANCH);
+  }
+
+  protected void createAndInitTable(
+      String schema, String partitioning, String jsonData, String branch) {
     sql("CREATE TABLE %s (%s) USING iceberg %s", tableName, schema, partitioning);
     initTable();
 
     if (jsonData != null) {
       try {
         Dataset<Row> ds = toDS(schema, jsonData);
-        ds.coalesce(1).writeTo(tableName).append();
+        ds.coalesce(1).writeTo(tableName).option(SparkWriteOptions.BRANCH, branch).append();
       } catch (NoSuchTableException e) {
         throw new RuntimeException("Failed to write data", e);
       }
@@ -192,9 +199,13 @@ public abstract class SparkRowLevelOperationsTestBase extends SparkExtensionsTes
   }
 
   protected void append(String table, String schema, String jsonData) {
+    appendToBranch(table, schema, jsonData, SnapshotRef.MAIN_BRANCH);
+  }
+
+  protected void appendToBranch(String table, String schema, String jsonData, String branch) {
     try {
       Dataset<Row> ds = toDS(schema, jsonData);
-      ds.coalesce(1).writeTo(table).append();
+      ds.coalesce(1).writeTo(table).option(SparkWriteOptions.BRANCH, branch).append();
     } catch (NoSuchTableException e) {
       throw new RuntimeException("Failed to write data", e);
     }

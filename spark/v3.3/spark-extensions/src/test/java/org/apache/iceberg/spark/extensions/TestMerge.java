@@ -44,6 +44,7 @@ import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DistributionMode;
 import org.apache.iceberg.RowLevelOperationMode;
 import org.apache.iceberg.Snapshot;
+import org.apache.iceberg.SnapshotRef;
 import org.apache.iceberg.SnapshotSummary;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.data.GenericRecord;
@@ -52,6 +53,7 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.relocated.com.google.common.util.concurrent.MoreExecutors;
+import org.apache.iceberg.spark.SparkSQLProperties;
 import org.apache.spark.SparkException;
 import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.Dataset;
@@ -2358,6 +2360,59 @@ public abstract class TestMerge extends SparkRowLevelOperationsTestBase {
 
     List<Object[]> result = sql("SELECT * FROM %s ORDER BY id", tableName);
     assertEquals("Should correctly add the non-matching rows", expectedRows, result);
+  }
+
+  @Test
+  public void testMergeIntoPartitionedAndOrderedTableBranch() {
+    String branch = "test-branch";
+    for (DistributionMode mode : DistributionMode.values()) {
+      createAndInitTable("id INT, dep STRING", "", null, branch);
+      sql("ALTER TABLE %s ADD PARTITION FIELD dep", tableName);
+      sql("ALTER TABLE %s WRITE ORDERED BY (id)", tableName);
+      sql(
+          "ALTER TABLE %s SET TBLPROPERTIES('%s' '%s')",
+          tableName, WRITE_DISTRIBUTION_MODE, mode.modeName());
+
+      appendToBranch(
+          tableName,
+          null,
+          "{ \"id\": 1, \"dep\": \"emp-id-one\" }\n" + "{ \"id\": 6, \"dep\": \"emp-id-6\" }",
+          branch);
+
+      createOrReplaceView(
+          "source",
+          "id INT, dep STRING",
+          "{ \"id\": 2, \"dep\": \"emp-id-2\" }\n"
+              + "{ \"id\": 1, \"dep\": \"emp-id-1\" }\n"
+              + "{ \"id\": 6, \"dep\": \"emp-id-6\" }");
+
+      withSQLConf(
+          ImmutableMap.of(SparkSQLProperties.BRANCH, branch),
+          () ->
+              sql(
+                  "MERGE INTO %s AS t USING source AS s "
+                      + "ON t.id == s.id "
+                      + "WHEN MATCHED AND t.id = 1 THEN "
+                      + "  UPDATE SET * "
+                      + "WHEN MATCHED AND t.id = 6 THEN "
+                      + "  DELETE "
+                      + "WHEN NOT MATCHED AND s.id = 2 THEN "
+                      + "  INSERT *",
+                  tableName));
+
+      ImmutableList<Object[]> expectedRows =
+          ImmutableList.of(
+              row(1, "emp-id-1"), // updated
+              row(2, "emp-id-2") // new
+              );
+
+      assertEquals(
+          "Should have expected rows",
+          expectedRows,
+          sql("SELECT * FROM %s VERSION AS OF '%s' ORDER BY id", tableName, branch));
+
+      removeTables();
+    }
   }
 
   private void checkJoinAndFilterConditions(String query, String join, String icebergFilters) {
