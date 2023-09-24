@@ -26,6 +26,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.SequenceInputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -228,6 +229,7 @@ class S3OutputStream extends PositionOutputStream {
     }
 
     stagingFiles.add(new FileAndDigest(currentStagingFile, currentPartMessageDigest));
+    OutputStream outputStream = Files.newOutputStream(currentStagingFile.toPath());
 
     if (isChecksumEnabled) {
       DigestOutputStream digestOutputStream;
@@ -236,13 +238,13 @@ class S3OutputStream extends PositionOutputStream {
       if (multipartUploadId != null) {
         digestOutputStream =
             new DigestOutputStream(
-                new BufferedOutputStream(new FileOutputStream(currentStagingFile)),
+                new BufferedOutputStream(outputStream),
                 currentPartMessageDigest);
       } else {
         digestOutputStream =
             new DigestOutputStream(
                 new DigestOutputStream(
-                    new BufferedOutputStream(new FileOutputStream(currentStagingFile)),
+                    new BufferedOutputStream(outputStream),
                     currentPartMessageDigest),
                 completeMessageDigest);
       }
@@ -251,7 +253,7 @@ class S3OutputStream extends PositionOutputStream {
     } else {
       stream =
           new CountingOutputStream(
-              new BufferedOutputStream(new FileOutputStream(currentStagingFile)));
+              new BufferedOutputStream(outputStream));
     }
   }
 
