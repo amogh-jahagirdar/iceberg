@@ -771,6 +771,11 @@ public class BaseTransaction implements Transaction {
     }
 
     @Override
+    public String uuid() {
+      return current.uuid();
+    }
+
+    @Override
     public String toString() {
       return name();
     }

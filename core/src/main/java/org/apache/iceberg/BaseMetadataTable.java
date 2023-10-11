@@ -200,6 +200,11 @@ public abstract class BaseMetadataTable extends BaseReadOnlyTable
   }
 
   @Override
+  public String uuid() {
+    return table().uuid();
+  }
+
+  @Override
   public String toString() {
     return name();
   }

@@ -67,6 +67,7 @@ public class SerializableTable implements Table, Serializable {
   private transient volatile Schema lazySchema = null;
   private transient volatile Map<Integer, PartitionSpec> lazySpecs = null;
   private transient volatile SortOrder lazySortOrder = null;
+  private final String uuid;
 
   protected SerializableTable(Table table) {
     this.name = table.name();
@@ -83,6 +84,7 @@ public class SerializableTable implements Table, Serializable {
     this.encryption = table.encryption();
     this.locationProvider = table.locationProvider();
     this.refs = SerializableMap.copyOf(table.refs());
+    this.uuid = table.uuid();
   }
 
   /**
@@ -245,6 +247,11 @@ public class SerializableTable implements Table, Serializable {
   @Override
   public Map<String, SnapshotRef> refs() {
     return refs;
+  }
+
+  @Override
+  public String uuid() {
+    return uuid;
   }
 
   @Override

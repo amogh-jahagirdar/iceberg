@@ -334,6 +334,15 @@ public interface Table {
   Map<String, SnapshotRef> refs();
 
   /**
+   * Returns the UUID of the table
+   *
+   * @return the UUID of the table
+   */
+  default String uuid() {
+    throw new UnsupportedOperationException(this.getClass().getName() + " doesn't implement uuid");
+  }
+
+  /**
    * Returns the snapshot referenced by the given name or null if no such reference exists.
    *
    * @return the snapshot which is referenced by the given name or null if no such reference exists.
