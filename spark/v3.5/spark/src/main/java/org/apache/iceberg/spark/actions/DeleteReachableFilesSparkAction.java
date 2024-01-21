@@ -103,7 +103,7 @@ public class DeleteReachableFilesSparkAction
         PropertyUtil.propertyAsBoolean(metadata.properties(), GC_ENABLED, GC_ENABLED_DEFAULT),
         "Cannot delete files: GC is disabled (deleting files may corrupt other tables)");
 
-    Dataset<FileInfo> reachableFileDS = reachableFileDS(metadata);
+    Dataset<FileInfo> reachableFileDS = reachableFileDS(metadata).map(fileInfo -> fileI);
 
     if (streamResults()) {
       return deleteFiles(reachableFileDS.toLocalIterator());

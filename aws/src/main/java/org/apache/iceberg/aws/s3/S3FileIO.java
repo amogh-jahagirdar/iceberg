@@ -215,12 +215,12 @@ public class S3FileIO implements CredentialSupplier, DelegateFileIO {
       }
 
       int totalFailedDeletions = 0;
-
+      List<String> failedDeletions = Lists.newArrayList();
       for (Future<List<String>> deletionTask : deletionTasks) {
         try {
-          List<String> failedDeletions = deletionTask.get();
+          List<String> failedDeletionsForTask = deletionTask.get();
           failedDeletions.forEach(path -> LOG.warn("Failed to delete object at path {}", path));
-          totalFailedDeletions += failedDeletions.size();
+          totalFailedDeletions += failedDeletionsForTask.size();
         } catch (ExecutionException e) {
           LOG.warn("Caught unexpected exception during batch deletion: ", e.getCause());
         } catch (InterruptedException e) {
@@ -231,7 +231,7 @@ public class S3FileIO implements CredentialSupplier, DelegateFileIO {
       }
 
       if (totalFailedDeletions > 0) {
-        throw new BulkDeletionFailureException(totalFailedDeletions);
+        throw new BulkDeletionFailureException(failedDeletions);
       }
     }
   }

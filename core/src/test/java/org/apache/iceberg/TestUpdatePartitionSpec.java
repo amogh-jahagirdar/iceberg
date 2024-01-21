@@ -528,7 +528,7 @@ public class TestUpdatePartitionSpec extends TableTestBase {
   @Test
   public void testAddDuplicateByName() {
     Assertions.assertThatThrownBy(
-            () -> new BaseUpdatePartitionSpec(formatVersion, PARTITIONED).addField("category"))
+            () -> new BaseUpdatePartitionSpec(formatVersion, PAARTITIONED).addField("category"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageStartingWith("Cannot add duplicate partition field");
   }

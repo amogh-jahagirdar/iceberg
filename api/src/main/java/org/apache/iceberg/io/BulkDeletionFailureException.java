@@ -18,15 +18,27 @@
  */
 package org.apache.iceberg.io;
 
+import java.util.List;
+
 public class BulkDeletionFailureException extends RuntimeException {
   private final int numberFailedObjects;
+  private List<String> failedFiles = null;
 
   public BulkDeletionFailureException(int numberFailedObjects) {
     super(String.format("Failed to delete %d files", numberFailedObjects));
     this.numberFailedObjects = numberFailedObjects;
   }
 
+  public BulkDeletionFailureException(List<String> failedFiles) {
+    this.numberFailedObjects = failedFiles.size();
+    this.failedFiles = failedFiles;
+  }
+
   public int numberFailedObjects() {
     return numberFailedObjects;
+  }
+
+  public List<String> failedObjects() {
+    return failedFiles;
   }
 }

@@ -254,6 +254,7 @@ abstract class BaseSparkAction<ThisT> {
               String type = fileInfo.getType();
               deleteFunc.accept(path);
               summary.deletedFile(path, type);
+              summary.incrementBytesDeleted(fileLength());
             });
 
     return summary;
@@ -276,6 +277,7 @@ abstract class BaseSparkAction<ThisT> {
     ListMultimap<String, FileInfo> filesByType = Multimaps.index(fileGroup, FileInfo::getType);
     ListMultimap<String, String> pathsByType =
         Multimaps.transformValues(filesByType, FileInfo::getPath);
+    AtomicLong bytesRemoved = new AtomicLong();
 
     for (Map.Entry<String, Collection<String>> entry : pathsByType.asMap().entrySet()) {
       String type = entry.getKey();
@@ -283,11 +285,21 @@ abstract class BaseSparkAction<ThisT> {
       int failures = 0;
       try {
         io.deleteFiles(paths);
+        Tasks.foreach(paths).run(path -> bytesRemoved.getAndAdd(fileLength(io, path)));
       } catch (BulkDeletionFailureException e) {
         failures = e.numberFailedObjects();
+        List<String> failedPaths = e.failedObjects();
+        Tasks.foreach(failedPaths)
+            .run(failedPath -> bytesRemoved.getAndAdd(-fileLength(io, failedPath)));
       }
+
       summary.deletedFiles(type, paths.size() - failures);
+      summary.incrementBytesDeleted(bytesRemoved.get());
     }
+  }
+
+  private static long fileLength(FileIO fileIO, String path) {
+    return fileIO.newInputFile(path).getLength();
   }
 
   static class DeleteSummary {
@@ -298,6 +310,7 @@ abstract class BaseSparkAction<ThisT> {
     private final AtomicLong manifestListsCount = new AtomicLong(0L);
     private final AtomicLong statisticsFilesCount = new AtomicLong(0L);
     private final AtomicLong otherFilesCount = new AtomicLong(0L);
+    private final AtomicLong bytesDeleted = new AtomicLong(0L);
 
     public void deletedFiles(String type, int numFiles) {
       if (FileContent.DATA.name().equalsIgnoreCase(type)) {
@@ -360,6 +373,10 @@ abstract class BaseSparkAction<ThisT> {
       }
     }
 
+    public void incrementBytesDeleted(long bytes) {
+      bytesDeleted.addAndGet(bytes);
+    }
+
     public long dataFilesCount() {
       return dataFilesCount.get();
     }
@@ -386,6 +403,10 @@ abstract class BaseSparkAction<ThisT> {
 
     public long otherFilesCount() {
       return otherFilesCount.get();
+    }
+
+    public long bytesDeleted() {
+      return bytesDeleted.get();
     }
 
     public long totalFilesCount() {

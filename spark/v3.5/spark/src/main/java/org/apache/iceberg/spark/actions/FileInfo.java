@@ -27,10 +27,8 @@ public class FileInfo {
   private String path;
   private String type;
 
-  public FileInfo(String path, String type) {
-    this.path = path;
-    this.type = type;
-  }
+  private Long length;
+
 
   public FileInfo() {}
 
@@ -48,5 +46,13 @@ public class FileInfo {
 
   public void setType(String type) {
     this.type = type;
+  }
+
+  public Long getLength() {
+    return length;
+  }
+
+  public void setLength(Long length) {
+    this.length = length;
   }
 }
