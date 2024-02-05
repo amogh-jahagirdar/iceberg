@@ -32,6 +32,7 @@ import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3AsyncClientBuilder;
 
 public class AwsClientProperties implements Serializable {
   /**
@@ -101,6 +102,21 @@ public class AwsClientProperties implements Serializable {
    * </pre>
    */
   public <T extends AwsClientBuilder> void applyClientRegionConfiguration(T builder) {
+    if (clientRegion != null) {
+      builder.region(Region.of(clientRegion));
+    }
+  }
+
+  /**
+   * Configure a client AWS region CRT
+   *
+   * <p>Sample usage:
+   *
+   * <pre>
+   *     S3Client.builder().applyMutation(awsClientProperties::applyClientRegionConfiguration)
+   * </pre>
+   */
+  public <T extends S3AsyncClientBuilder> void applyClientRegionConfigurationAsync(T builder) {
     if (clientRegion != null) {
       builder.region(Region.of(clientRegion));
     }

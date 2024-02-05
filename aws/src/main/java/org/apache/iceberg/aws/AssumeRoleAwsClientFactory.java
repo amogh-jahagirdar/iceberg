@@ -28,6 +28,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.glue.GlueClient;
 import software.amazon.awssdk.services.kms.KmsClient;
+import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
@@ -38,9 +39,19 @@ public class AssumeRoleAwsClientFactory implements AwsClientFactory {
   private HttpClientProperties httpClientProperties;
   private S3FileIOProperties s3FileIOProperties;
   private String roleSessionName;
+  private boolean s3CrtEnabled = true;
 
   @Override
   public S3Client s3() {
+    if (s3CrtEnabled) {
+      return new S3ClientAdapter(
+          S3AsyncClient.builder()
+              .applyMutation(s3FileIOProperties::applyEndpointConfigurationsAsync)
+              .applyMutation(s3FileIOProperties::applyServiceConfigurationsAsync)
+              .applyMutation(s3FileIOProperties::applySignerConfigurationAsync)
+              .build());
+    }
+
     return S3Client.builder()
         .applyMutation(this::applyAssumeRoleConfigurations)
         .applyMutation(httpClientProperties::applyHttpClientConfigurations)

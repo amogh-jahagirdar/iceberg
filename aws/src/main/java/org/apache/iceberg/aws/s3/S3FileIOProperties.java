@@ -36,6 +36,7 @@ import org.apache.iceberg.util.PropertyUtil;
 import org.apache.iceberg.util.SerializableMap;
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider;
 import software.amazon.awssdk.core.client.config.SdkAdvancedClientOption;
+import software.amazon.awssdk.services.s3.S3AsyncClientBuilder;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
@@ -747,6 +748,14 @@ public class S3FileIOProperties implements Serializable {
             : awsClientProperties.credentialsProvider(accessKeyId, secretAccessKey, sessionToken));
   }
 
+  public <T extends S3AsyncClientBuilder> void applyCredentialConfigurationsAsync(
+      AwsClientProperties awsClientProperties, T builder) {
+    builder.credentialsProvider(
+        isRemoteSigningEnabled
+            ? AnonymousCredentialsProvider.create()
+            : awsClientProperties.credentialsProvider(accessKeyId, secretAccessKey, sessionToken));
+  }
+
   /**
    * Configure services settings for an S3 client. The settings include: s3DualStack,
    * s3UseArnRegion, s3PathStyleAccess, and s3Acceleration
@@ -758,6 +767,17 @@ public class S3FileIOProperties implements Serializable {
    * </pre>
    */
   public <T extends S3ClientBuilder> void applyServiceConfigurations(T builder) {
+    builder
+        .dualstackEnabled(isDualStackEnabled)
+        .serviceConfiguration(
+            S3Configuration.builder()
+                .pathStyleAccessEnabled(isPathStyleAccess)
+                .useArnRegionEnabled(isUseArnRegionEnabled)
+                .accelerateModeEnabled(isAccelerationEnabled)
+                .build());
+  }
+
+  public <T extends S3AsyncClientBuilder> void applyServiceConfigurationsAsync(T builder) {
     builder
         .dualstackEnabled(isDualStackEnabled)
         .serviceConfiguration(
@@ -798,6 +818,30 @@ public class S3FileIOProperties implements Serializable {
   public <T extends S3ClientBuilder> void applyEndpointConfigurations(T builder) {
     if (endpoint != null) {
       builder.endpointOverride(URI.create(endpoint));
+    }
+  }
+
+  /**
+   * Override the endpoint for an S3 client async
+   *
+   * <p>Sample usage:
+   *
+   * <pre>
+   *     S3Client.builder().applyMutation(s3FileIOProperties::applyEndpointConfigurations)
+   * </pre>
+   */
+  public <T extends S3AsyncClientBuilder> void applyEndpointConfigurationsAsync(T builder) {
+    if (endpoint != null) {
+      builder.endpointOverride(URI.create(endpoint));
+    }
+  }
+
+  public <T extends S3AsyncClientBuilder> void applySignerConfigurationAsync(T builder) {
+    if (isRemoteSigningEnabled) {
+      builder.overrideConfiguration(
+          c ->
+              c.putAdvancedOption(
+                  SdkAdvancedClientOption.SIGNER, S3V4RestSignerClient.create(allProperties)));
     }
   }
 

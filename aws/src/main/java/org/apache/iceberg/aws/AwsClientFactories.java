@@ -39,6 +39,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClientBuilder;
 import software.amazon.awssdk.services.glue.GlueClient;
 import software.amazon.awssdk.services.glue.GlueClientBuilder;
 import software.amazon.awssdk.services.kms.KmsClient;
+import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.S3Configuration;
@@ -94,6 +95,7 @@ public class AwsClientFactories {
     private AwsClientProperties awsClientProperties;
     private S3FileIOProperties s3FileIOProperties;
     private HttpClientProperties httpClientProperties;
+    private boolean s3CrtEnabled = true;
 
     DefaultAwsClientFactory() {
       awsProperties = new AwsProperties();
@@ -104,6 +106,21 @@ public class AwsClientFactories {
 
     @Override
     public S3Client s3() {
+
+      if (s3CrtEnabled) {
+        return new S3ClientAdapter(
+            S3AsyncClient.builder()
+                .applyMutation(awsClientProperties::applyClientRegionConfiguration)
+                .applyMutation(s3FileIOProperties::applyEndpointConfigurationsAsync)
+                .applyMutation(s3FileIOProperties::applyServiceConfigurationsAsync)
+                .applyMutation(
+                    b ->
+                        s3FileIOProperties.applyCredentialConfigurationsAsync(
+                            awsClientProperties, b))
+                .applyMutation(s3FileIOProperties::applySignerConfigurationAsync)
+                .build());
+      }
+
       return S3Client.builder()
           .applyMutation(awsClientProperties::applyClientRegionConfiguration)
           .applyMutation(httpClientProperties::applyHttpClientConfigurations)
