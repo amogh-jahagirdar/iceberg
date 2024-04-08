@@ -241,6 +241,17 @@ public abstract class ViewCatalogTests<C extends ViewCatalog & SupportsNamespace
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("Cannot create view without specifying a default namespace");
 
+    assertThatThrownBy(
+            () ->
+                catalog()
+                    .buildView(identifier)
+                    .withQuery(trino.dialect(), trino.sql())
+                    .withSchema(SCHEMA)
+                    .withDefaultNamespace(Namespace.empty())
+                    .create())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("Cannot create view with empty default namespace");
+
     // cannot define multiple SQLs for same dialect
     assertThatThrownBy(
             () ->

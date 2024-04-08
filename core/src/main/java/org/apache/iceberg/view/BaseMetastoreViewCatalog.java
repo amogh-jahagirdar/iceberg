@@ -154,6 +154,9 @@ public abstract class BaseMetastoreViewCatalog extends BaseMetastoreCatalog impl
       Preconditions.checkState(null != schema, "Cannot create view without specifying schema");
       Preconditions.checkState(
           null != defaultNamespace, "Cannot create view without specifying a default namespace");
+      Preconditions.checkState(
+          !Namespace.empty().equals(defaultNamespace),
+          "Cannot create view with empty default namespace");
 
       ViewVersion viewVersion =
           ImmutableViewVersion.builder()
