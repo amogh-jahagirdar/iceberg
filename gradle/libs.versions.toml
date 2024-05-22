@@ -24,6 +24,7 @@ activation = "1.1.1"
 aliyun-sdk-oss = "3.10.2"
 antlr = "4.9.3"
 aircompressor = "0.26"
+apache-commons4 = "4.4"
 arrow = "15.0.2"
 avro = "1.11.3"
 assertj-core = "3.25.3"
@@ -58,6 +59,7 @@ jackson215 = { strictly = "2.15.2"}
 jakarta-el-api = "3.0.3"
 jaxb-api = "2.3.1"
 jaxb-runtime = "2.3.9"
+jolcore = "0.17"
 jetty = "9.4.54.v20240208"
 junit = "5.10.1"
 kafka = "3.7.0"
@@ -93,6 +95,7 @@ aircompressor = { module = "io.airlift:aircompressor", version.ref = "aircompres
 aliyun-sdk-oss = { module = "com.aliyun.oss:aliyun-sdk-oss", version.ref = "aliyun-sdk-oss" }
 antlr-antlr4 = { module = "org.antlr:antlr4", version.ref = "antlr" }
 antlr-runtime = { module = "org.antlr:antlr4-runtime", version.ref = "antlr" }
+apache-commons4 = {module = "org.apache.commons:commons-collections4", version.ref = "apache-commons4"}
 arrow-memory-netty = { module = "org.apache.arrow:arrow-memory-netty", version.ref = "arrow" }
 arrow-vector = { module = "org.apache.arrow:arrow-vector", version.ref = "arrow" }
 avro-avro = { module = "org.apache.avro:avro", version.ref = "avro" }
@@ -149,6 +152,7 @@ jackson212-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "
 jackson213-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref =  "jackson213" }
 jackson214-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref =  "jackson214" }
 jackson215-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "jackson215" }
+java-object-layout = {module = "org.openjdk.jol:jol-core", version.ref = "jolcore"}
 jaxb-api = { module = "javax.xml.bind:jaxb-api", version.ref = "jaxb-api" }
 jaxb-runtime = { module = "org.glassfish.jaxb:jaxb-runtime", version.ref = "jaxb-runtime" }
 kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka" }

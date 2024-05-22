@@ -1,0 +1,119 @@
+# JMH version: 1.37
+# VM version: JDK 11.0.2, OpenJDK 64-Bit Server VM, 11.0.2+9
+# VM invoker: /home/amogh-jahagirdar/.asdf/installs/java/openjdk-11.0.2/bin/java
+# VM options: -Dfile.encoding=UTF-8 -Djava.io.tmpdir=/home/amogh-jahagirdar/workspace/iceberg/core/build/tmp/jmh -Duser.country=US -Duser.language=en -Duser.variant
+# Blackhole mode: full + dont-inline hint (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, single-shot each
+# Measurement: 5 iterations, single-shot each
+# Timeout: 20 min per iteration
+# Threads: 1 thread
+# Benchmark mode: Single shot invocation time
+# Benchmark: org.apache.iceberg.DatafileSetBenchmark.benchmarkSetAdds
+# Parameters: (benchmarkHashSet = true)
+
+# Run progress: 0.00% complete, ETA 00:00:00
+# Fork: 1 of 1
+# Warmup Iteration   1: 1.056 s/op
+# Warmup Iteration   2: 0.242 s/op
+# Warmup Iteration   3: 0.147 s/op
+Iteration   1: 0.179 s/op
+Iteration   2: 0.187 s/op
+Iteration   3: 0.153 s/op
+Iteration   4: 0.122 s/op
+Iteration   5: 0.216 s/op
+
+
+Result "org.apache.iceberg.DatafileSetBenchmark.benchmarkSetAdds":
+  N = 5
+  mean =      0.171 ±(99.9%) 0.137 s/op
+
+  Histogram, s/op:
+    [0.120, 0.130) = 1 
+    [0.130, 0.140) = 0 
+    [0.140, 0.150) = 0 
+    [0.150, 0.160) = 1 
+    [0.160, 0.170) = 0 
+    [0.170, 0.180) = 1 
+    [0.180, 0.190) = 1 
+    [0.190, 0.200) = 0 
+    [0.200, 0.210) = 0 
+
+  Percentiles, s/op:
+      p(0.0000) =      0.122 s/op
+     p(50.0000) =      0.179 s/op
+     p(90.0000) =      0.216 s/op
+     p(95.0000) =      0.216 s/op
+     p(99.0000) =      0.216 s/op
+     p(99.9000) =      0.216 s/op
+     p(99.9900) =      0.216 s/op
+     p(99.9990) =      0.216 s/op
+     p(99.9999) =      0.216 s/op
+    p(100.0000) =      0.216 s/op
+
+
+# JMH version: 1.37
+# VM version: JDK 11.0.2, OpenJDK 64-Bit Server VM, 11.0.2+9
+# VM invoker: /home/amogh-jahagirdar/.asdf/installs/java/openjdk-11.0.2/bin/java
+# VM options: -Dfile.encoding=UTF-8 -Djava.io.tmpdir=/home/amogh-jahagirdar/workspace/iceberg/core/build/tmp/jmh -Duser.country=US -Duser.language=en -Duser.variant
+# Blackhole mode: full + dont-inline hint (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, single-shot each
+# Measurement: 5 iterations, single-shot each
+# Timeout: 20 min per iteration
+# Threads: 1 thread
+# Benchmark mode: Single shot invocation time
+# Benchmark: org.apache.iceberg.DatafileSetBenchmark.benchmarkSetAdds
+# Parameters: (benchmarkHashSet = false)
+
+# Run progress: 50.00% complete, ETA 00:00:03
+# Fork: 1 of 1
+# Warmup Iteration   1: 0.923 s/op
+# Warmup Iteration   2: 0.275 s/op
+# Warmup Iteration   3: 0.209 s/op
+Iteration   1: 0.191 s/op
+Iteration   2: 0.188 s/op
+Iteration   3: 0.230 s/op
+Iteration   4: 0.263 s/op
+Iteration   5: 0.178 s/op
+
+
+Result "org.apache.iceberg.DatafileSetBenchmark.benchmarkSetAdds":
+  N = 5
+  mean =      0.210 ±(99.9%) 0.137 s/op
+
+  Histogram, s/op:
+    [0.170, 0.180) = 1 
+    [0.180, 0.190) = 1 
+    [0.190, 0.200) = 1 
+    [0.200, 0.210) = 0 
+    [0.210, 0.220) = 0 
+    [0.220, 0.230) = 1 
+    [0.230, 0.240) = 0 
+    [0.240, 0.250) = 0 
+    [0.250, 0.260) = 0 
+
+  Percentiles, s/op:
+      p(0.0000) =      0.178 s/op
+     p(50.0000) =      0.191 s/op
+     p(90.0000) =      0.263 s/op
+     p(95.0000) =      0.263 s/op
+     p(99.0000) =      0.263 s/op
+     p(99.9000) =      0.263 s/op
+     p(99.9900) =      0.263 s/op
+     p(99.9990) =      0.263 s/op
+     p(99.9999) =      0.263 s/op
+    p(100.0000) =      0.263 s/op
+
+
+# Run complete. Total time: 00:00:06
+
+REMEMBER: The numbers below are just data. To gain reusable insights, you need to follow up on
+why the numbers are the way they are. Use profilers (see -prof, -lprof), design factorial
+experiments, perform baseline and negative tests that provide experimental control, make sure
+the benchmarking environment is safe on JVM/OS/HW level, ask for reviews from the domain experts.
+Do not assume the numbers tell you what you want them to tell.
+
+Benchmark                              (benchmarkHashSet)  Mode  Cnt  Score   Error  Units
+DatafileSetBenchmark.benchmarkSetAdds                true    ss    5  0.171 ± 0.137   s/op
+DatafileSetBenchmark.benchmarkSetAdds               false    ss    5  0.210 ± 0.137   s/op
+
+Benchmark result is saved to /home/amogh-jahagirdar/workspace/iceberg/core/build/reports/jmh/results.json

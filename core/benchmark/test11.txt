@@ -1,0 +1,133 @@
+# JMH version: 1.37
+# VM version: JDK 11.0.2, OpenJDK 64-Bit Server VM, 11.0.2+9
+# VM invoker: /home/amogh-jahagirdar/.asdf/installs/java/openjdk-11.0.2/bin/java
+# VM options: -Dfile.encoding=UTF-8 -Djava.io.tmpdir=/home/amogh-jahagirdar/workspace/iceberg/core/build/tmp/jmh -Duser.country=US -Duser.language=en -Duser.variant
+# Blackhole mode: full + dont-inline hint (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, single-shot each
+# Measurement: 5 iterations, single-shot each
+# Timeout: 20 min per iteration
+# Threads: 1 thread
+# Benchmark mode: Single shot invocation time
+# Benchmark: org.apache.iceberg.DatafileSetBenchmark.benchmarkSetAdds
+# Parameters: (benchmarkHashSet = false)
+
+# Run progress: 0.00% complete, ETA 00:00:00
+# Fork: 1 of 1
+# Warmup Iteration   1: WARNING: An illegal reflective access operation has occurred
+WARNING: Illegal reflective access by org.openjdk.jol.info.AbstractGraphWalker$ReferenceFieldsClassValue (file:/home/amogh-jahagirdar/workspace/iceberg/core/build/libs/iceberg-core-1.6.0-SNAPSHOT-jmh.jar) to field java.util.AbstractMap.keySet
+WARNING: Please consider reporting this to the maintainers of org.openjdk.jol.info.AbstractGraphWalker$ReferenceFieldsClassValue
+WARNING: Use --illegal-access=warn to enable warnings of further illegal reflective access operations
+WARNING: All illegal access operations will be denied in a future release
+12.813 s/op
+# Warmup Iteration   2: 8.150 s/op
+# Warmup Iteration   3: 9.000 s/op
+Iteration   1: 7.287 s/op
+Iteration   2: 7.538 s/op
+Iteration   3: 8.810 s/op
+Iteration   4: 7.222 s/op
+Iteration   5: 6.718 s/op
+
+
+Result "org.apache.iceberg.DatafileSetBenchmark.benchmarkSetAdds":
+  N = 5
+  mean =      7.515 ±(99.9%) 3.014 s/op
+
+  Histogram, s/op:
+    [6.000, 6.250) = 0 
+    [6.250, 6.500) = 0 
+    [6.500, 6.750) = 1 
+    [6.750, 7.000) = 0 
+    [7.000, 7.250) = 1 
+    [7.250, 7.500) = 1 
+    [7.500, 7.750) = 1 
+    [7.750, 8.000) = 0 
+    [8.000, 8.250) = 0 
+    [8.250, 8.500) = 0 
+    [8.500, 8.750) = 0 
+
+  Percentiles, s/op:
+      p(0.0000) =      6.718 s/op
+     p(50.0000) =      7.287 s/op
+     p(90.0000) =      8.810 s/op
+     p(95.0000) =      8.810 s/op
+     p(99.0000) =      8.810 s/op
+     p(99.9000) =      8.810 s/op
+     p(99.9900) =      8.810 s/op
+     p(99.9990) =      8.810 s/op
+     p(99.9999) =      8.810 s/op
+    p(100.0000) =      8.810 s/op
+
+
+# JMH version: 1.37
+# VM version: JDK 11.0.2, OpenJDK 64-Bit Server VM, 11.0.2+9
+# VM invoker: /home/amogh-jahagirdar/.asdf/installs/java/openjdk-11.0.2/bin/java
+# VM options: -Dfile.encoding=UTF-8 -Djava.io.tmpdir=/home/amogh-jahagirdar/workspace/iceberg/core/build/tmp/jmh -Duser.country=US -Duser.language=en -Duser.variant
+# Blackhole mode: full + dont-inline hint (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, single-shot each
+# Measurement: 5 iterations, single-shot each
+# Timeout: 20 min per iteration
+# Threads: 1 thread
+# Benchmark mode: Single shot invocation time
+# Benchmark: org.apache.iceberg.DatafileSetBenchmark.benchmarkSetAdds
+# Parameters: (benchmarkHashSet = true)
+
+# Run progress: 50.00% complete, ETA 00:01:08
+# Fork: 1 of 1
+# Warmup Iteration   1: WARNING: An illegal reflective access operation has occurred
+WARNING: Illegal reflective access by org.openjdk.jol.info.AbstractGraphWalker$ReferenceFieldsClassValue (file:/home/amogh-jahagirdar/workspace/iceberg/core/build/libs/iceberg-core-1.6.0-SNAPSHOT-jmh.jar) to field java.util.HashSet.map
+WARNING: Please consider reporting this to the maintainers of org.openjdk.jol.info.AbstractGraphWalker$ReferenceFieldsClassValue
+WARNING: Use --illegal-access=warn to enable warnings of further illegal reflective access operations
+WARNING: All illegal access operations will be denied in a future release
+8.229 s/op
+# Warmup Iteration   2: 4.527 s/op
+# Warmup Iteration   3: 5.242 s/op
+Iteration   1: 5.102 s/op
+Iteration   2: 4.840 s/op
+Iteration   3: 6.543 s/op
+Iteration   4: 5.101 s/op
+Iteration   5: 4.317 s/op
+
+
+Result "org.apache.iceberg.DatafileSetBenchmark.benchmarkSetAdds":
+  N = 5
+  mean =      5.180 ±(99.9%) 3.182 s/op
+
+  Histogram, s/op:
+    [4.000, 4.250) = 0 
+    [4.250, 4.500) = 1 
+    [4.500, 4.750) = 0 
+    [4.750, 5.000) = 1 
+    [5.000, 5.250) = 2 
+    [5.250, 5.500) = 0 
+    [5.500, 5.750) = 0 
+    [5.750, 6.000) = 0 
+    [6.000, 6.250) = 0 
+    [6.250, 6.500) = 0 
+    [6.500, 6.750) = 1 
+
+  Percentiles, s/op:
+      p(0.0000) =      4.317 s/op
+     p(50.0000) =      5.101 s/op
+     p(90.0000) =      6.543 s/op
+     p(95.0000) =      6.543 s/op
+     p(99.0000) =      6.543 s/op
+     p(99.9000) =      6.543 s/op
+     p(99.9900) =      6.543 s/op
+     p(99.9990) =      6.543 s/op
+     p(99.9999) =      6.543 s/op
+    p(100.0000) =      6.543 s/op
+
+
+# Run complete. Total time: 00:01:54
+
+REMEMBER: The numbers below are just data. To gain reusable insights, you need to follow up on
+why the numbers are the way they are. Use profilers (see -prof, -lprof), design factorial
+experiments, perform baseline and negative tests that provide experimental control, make sure
+the benchmarking environment is safe on JVM/OS/HW level, ask for reviews from the domain experts.
+Do not assume the numbers tell you what you want them to tell.
+
+Benchmark                              (benchmarkHashSet)  Mode  Cnt  Score   Error  Units
+DatafileSetBenchmark.benchmarkSetAdds               false    ss    5  7.515 ± 3.014   s/op
+DatafileSetBenchmark.benchmarkSetAdds                true    ss    5  5.180 ± 3.182   s/op
+
+Benchmark result is saved to /home/amogh-jahagirdar/workspace/iceberg/core/build/reports/jmh/results.json

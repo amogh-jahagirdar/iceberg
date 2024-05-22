@@ -322,7 +322,7 @@ public class DataFiles {
     }
 
     public DataFile build() {
-      Preconditions.checkArgument(filePath != null, "File path is required");
+      //Preconditions.checkArgument(filePath != null, "File path is required");
       if (format == null) {
         this.format = FileFormat.fromFileName(filePath);
       }
