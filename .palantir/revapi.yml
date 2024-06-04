@@ -1146,6 +1146,11 @@ acceptedBreaks:
         \ org.apache.iceberg.TableMetadata)"
       justification: "Removing deprecated code"
   "1.7.0":
+    org.apache.iceberg:iceberg-api:
+    - code: "java.method.addedToInterface"
+      new: "method org.apache.iceberg.RewriteManifests org.apache.iceberg.RewriteManifests::validateWith(java.util.function.BiFunction<java.lang.Long,\
+        \ java.lang.Long, java.lang.Void>)"
+      justification: "this is just for testing"
     org.apache.iceberg:iceberg-core:
     - code: "java.method.removed"
       old: "method <T extends org.apache.iceberg.StructLike> org.apache.iceberg.deletes.PositionDeleteIndex\
