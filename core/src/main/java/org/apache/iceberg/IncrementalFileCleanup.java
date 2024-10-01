@@ -129,6 +129,7 @@ class IncrementalFileCleanup extends FileCleanupStrategy {
               try (CloseableIterable<ManifestFile> manifests = readManifests(snapshot)) {
                 for (ManifestFile manifest : manifests) {
                   validManifests.add(manifest.path());
+                  referencedPartitionSpecs.add(manifest.partitionSpecId());
 
                   long snapshotId = manifest.snapshotId();
                   // whether the manifest was created by a valid snapshot (true) or an expired

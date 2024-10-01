@@ -37,6 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.apache.iceberg.ManifestEntry.Status;
 import org.apache.iceberg.exceptions.ValidationException;
+import org.apache.iceberg.expressions.Expressions;
 import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.io.PositionOutputStream;
 import org.apache.iceberg.puffin.Blob;
@@ -1618,6 +1619,51 @@ public class TestRemoveSnapshots extends TestBase {
 
     assertThat(table.snapshots()).hasSize(2);
     assertThat(deletedFiles).isEqualTo(expectedDeletes);
+  }
+
+  @TestTemplate
+  public void testRemoveUnpartitionedSpec() {
+    // clean it first to reset to unpartitioned
+    cleanupTables();
+    this.table = create(SCHEMA, PartitionSpec.unpartitioned());
+    DataFile file =
+        DataFiles.builder(table.spec())
+            .withPath("/path/to/data-0.parquet")
+            .withFileSizeInBytes(10)
+            .withRecordCount(100)
+            .build();
+    table.newAppend().appendFile(file).commit();
+
+    table.updateSpec().addField("data_bucket", Expressions.bucket("data", 16)).commit();
+
+    table.newDelete().deleteFile(file).commit();
+    DataFile bucketFile =
+        DataFiles.builder(table.spec())
+            .withPath("/path/to/data-0.parquet")
+            .withFileSizeInBytes(10)
+            .withRecordCount(100)
+            .withPartitionPath("data_bucket=0")
+            .build();
+    table.newAppend().appendFile(bucketFile).commit();
+    table
+        .expireSnapshots()
+        .expireOlderThan(System.currentTimeMillis())
+        .removeUnusedSpecs()
+        .commit();
+    assertThat(table.specs().keySet())
+        .as("unpartitioned spec should be removed")
+        .containsExactly(1);
+
+    table.updateSpec().removeField("data_bucket").commit();
+    assertThat(table.spec().isUnpartitioned()).as("Should equal to unpartitioned").isTrue();
+
+    int unpartitionedFieldsSize = formatVersion == 1 ? 1 : 0;
+    assertThat(table.spec().fields().size())
+        .as("Should have one void transform for v1 and empty for v2")
+        .isEqualTo(unpartitionedFieldsSize);
+    assertThat(table.spec().specId())
+        .as("unpartitioned is evolved to use a new SpecId")
+        .isEqualTo(2);
   }
 
   private Set<String> manifestPaths(Snapshot snapshot, FileIO io) {

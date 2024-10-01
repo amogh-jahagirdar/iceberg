@@ -118,4 +118,9 @@ public interface ExpireSnapshots extends PendingUpdate<List<Snapshot>> {
    * @return this for method chaining
    */
   ExpireSnapshots cleanExpiredFiles(boolean clean);
+
+  default ExpireSnapshots removeUnusedSpecs() {
+    throw new UnsupportedOperationException(
+        this.getClass().getName() + " doesn't implement removeUnusedSpecs");
+  }
 }

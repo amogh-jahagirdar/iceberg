@@ -108,6 +108,7 @@ class ReachableFileCleanup extends FileCleanupStrategy {
               try (CloseableIterable<ManifestFile> manifestFiles = readManifests(snapshot)) {
                 for (ManifestFile manifestFile : manifestFiles) {
                   candidateSet.remove(manifestFile);
+                  referencedPartitionSpecs.add(manifestFile.partitionSpecId());
                   if (candidateSet.isEmpty()) {
                     return;
                   }

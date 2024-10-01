@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import org.apache.iceberg.exceptions.CommitFailedException;
 import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
@@ -85,6 +86,7 @@ class RemoveSnapshots implements ExpireSnapshots {
   private ExecutorService planExecutorService = ThreadPools.getWorkerPool();
   private Boolean incrementalCleanup;
   private boolean specifiedSnapshotId = false;
+  private boolean removeUnusedSpecs = false;
 
   RemoveSnapshots(TableOperations ops) {
     this.ops = ops;
@@ -156,6 +158,12 @@ class RemoveSnapshots implements ExpireSnapshots {
   @Override
   public ExpireSnapshots planWith(ExecutorService executorService) {
     this.planExecutorService = executorService;
+    return this;
+  }
+
+  @Override
+  public ExpireSnapshots removeUnusedSpecs() {
+    this.removeUnusedSpecs = true;
     return this;
   }
 
@@ -347,5 +355,30 @@ class RemoveSnapshots implements ExpireSnapshots {
                 ops.io(), deleteExecutorService, planExecutorService, deleteFunc);
 
     cleanupStrategy.cleanFiles(base, current);
+    if (removeUnusedSpecs) {
+      cleanupUnusedSpecs(current, cleanupStrategy.reachablePartitionSpecs());
+    }
+  }
+
+  private void cleanupUnusedSpecs(TableMetadata current, Set<Integer> reachableSpecs) {
+    List<Integer> specsToRemove =
+        current.specs().stream()
+            .map(PartitionSpec::specId)
+            .filter(specId -> !reachableSpecs.contains(specId))
+            .collect(Collectors.toList());
+    TableMetadata tableMetadata =
+        TableMetadata.buildFrom(current).removeUnusedSpecsById(specsToRemove).build();
+    Tasks.foreach(ops)
+        .retry(base.propertyAsInt(COMMIT_NUM_RETRIES, COMMIT_NUM_RETRIES_DEFAULT))
+        .exponentialBackoff(
+            base.propertyAsInt(COMMIT_MIN_RETRY_WAIT_MS, COMMIT_MIN_RETRY_WAIT_MS_DEFAULT),
+            base.propertyAsInt(COMMIT_MAX_RETRY_WAIT_MS, COMMIT_MAX_RETRY_WAIT_MS_DEFAULT),
+            base.propertyAsInt(COMMIT_TOTAL_RETRY_TIME_MS, COMMIT_TOTAL_RETRY_TIME_MS_DEFAULT),
+            2.0 /* exponential */)
+        .onlyRetryOn(CommitFailedException.class)
+        .run(
+            item -> {
+              ops.commit(current, tableMetadata);
+            });
   }
 }
