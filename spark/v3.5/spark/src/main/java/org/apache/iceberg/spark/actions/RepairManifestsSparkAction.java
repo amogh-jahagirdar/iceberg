@@ -558,11 +558,11 @@ public class RepairManifestsSparkAction
       Dataset<Row> missingDataFilesDF = manifestEntryDF.filter("file_exists == false").cache();
 
       // number removed files
-      long numDataFilesRemoved = missingDataFilesDF.count();
-      if (numDataFilesRemoved == 0) {
+      if (missingDataFilesDF.isEmpty()) {
         return EMPTY_RESULT;
       }
 
+      long numDataFilesRemoved = missingDataFilesDF.count();
       List<ManifestFile> filesAndManifestsToRewriteManifests =
           manifestFileFromRow(manifestsByPath, missingDataFilesDF);
 
