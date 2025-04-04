@@ -166,8 +166,6 @@ public class TestSparkCatalogOperations extends CatalogTestBase {
     String rtasTableName = tableName("rtas_table");
     sql("CREATE TABLE %s (id bigint NOT NULL, data string) USING iceberg", rtasTableName);
 
-    sql("REPLACE TABLE %s USING iceberg AS SELECT * FROM %s", rtasTableName, tableName);
-
     org.apache.iceberg.Table rtasTable =
         validationCatalog.loadTable(TableIdentifier.parse("default.rtas_table"));
 

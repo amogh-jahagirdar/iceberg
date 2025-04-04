@@ -26,6 +26,8 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
+import org.apache.iceberg.MetadataColumns;
+import org.apache.iceberg.parquet.ColumnWriter;
 import org.apache.iceberg.parquet.ParquetValueReaders.ReusableEntry;
 import org.apache.iceberg.parquet.ParquetValueWriter;
 import org.apache.iceberg.parquet.ParquetValueWriters;
@@ -557,14 +559,39 @@ public class SparkParquetWriters {
 
   private static class InternalRowWriter extends ParquetValueWriters.StructWriter<InternalRow> {
     private final DataType[] types;
+    private final Integer[] rowLineageAttributeIndices = {null, null};
 
     private InternalRowWriter(List<ParquetValueWriter<?>> writers, List<DataType> types) {
       super(writers);
+      int writerIndex = 0;
+      for (ParquetValueWriter<?> writer : writers) {
+        if (writer.columns().size() == 1 && writer.columns().get(0) instanceof ColumnWriter) {
+          ColumnWriter<?> columnWriter = (ColumnWriter<?>) writer.columns().get(0);
+          if (columnWriter.desc().getPrimitiveType().getId().intValue()
+              == MetadataColumns.ROW_ID.fieldId()) {
+            rowLineageAttributeIndices[0] = writerIndex;
+          }
+          if (columnWriter.desc().getPrimitiveType().getId().intValue()
+              == MetadataColumns.LAST_UPDATED_SEQUENCE_NUMBER.fieldId()) {
+            rowLineageAttributeIndices[1] = writerIndex;
+          }
+          writerIndex++;
+        }
+      }
       this.types = types.toArray(new DataType[0]);
     }
 
     @Override
     protected Object get(InternalRow struct, int index) {
+      if (index >= struct.numFields()) {
+        if (rowLineageAttributeIndices[0] != null && index == rowLineageAttributeIndices[0]) {
+          return null;
+        }
+        if (rowLineageAttributeIndices[1] != null && index == rowLineageAttributeIndices[1]) {
+          return null;
+        }
+      }
+
       return struct.get(index, types[index]);
     }
   }
