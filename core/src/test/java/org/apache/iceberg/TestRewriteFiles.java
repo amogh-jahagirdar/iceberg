@@ -282,7 +282,7 @@ public class TestRewriteFiles extends TestBase {
                 .newRewrite()
                 .validateFromSnapshot(latestSnapshot(table, branch).snapshotId())
                 .rewriteFiles(
-                    ImmutableSet.of(FILE_A),
+                    ImmutableSet.of(FILE_A, FILE_B),
                     ImmutableSet.of(fileADeletes()),
                     ImmutableSet.of(FILE_D),
                     ImmutableSet.of()),
@@ -297,9 +297,9 @@ public class TestRewriteFiles extends TestBase {
 
     validateManifestEntries(
         pending.allManifests(table.io()).get(1),
-        ids(pendingId, baseSnapshotId, baseSnapshotId),
+        ids(pendingId, pendingId, baseSnapshotId),
         files(FILE_A, FILE_B, FILE_C),
-        statuses(DELETED, EXISTING, EXISTING));
+        statuses(DELETED, DELETED, EXISTING));
 
     validateDeleteManifest(
         pending.allManifests(table.io()).get(2),
@@ -433,7 +433,6 @@ public class TestRewriteFiles extends TestBase {
             .addDeletes(fileBDeletes()),
         branch);
 
-    long baseSnapshotId = latestSnapshot(readMetadata(), branch).snapshotId();
     table.ops().failCommits(5);
 
     RewriteFiles rewrite =
@@ -441,7 +440,7 @@ public class TestRewriteFiles extends TestBase {
             .newRewrite()
             .validateFromSnapshot(latestSnapshot(table, branch).snapshotId())
             .rewriteFiles(
-                ImmutableSet.of(FILE_A),
+                ImmutableSet.of(FILE_A, FILE_B, FILE_C),
                 ImmutableSet.of(fileADeletes(), fileBDeletes()),
                 ImmutableSet.of(FILE_D),
                 ImmutableSet.of());
@@ -460,9 +459,9 @@ public class TestRewriteFiles extends TestBase {
 
     validateManifestEntries(
         pending.allManifests(table.io()).get(1),
-        ids(pending.snapshotId(), baseSnapshotId, baseSnapshotId),
+        ids(pending.snapshotId(), pending.snapshotId(), pending.snapshotId()),
         files(FILE_A, FILE_B, FILE_C),
-        statuses(DELETED, EXISTING, EXISTING));
+        statuses(DELETED, DELETED, DELETED));
 
     validateDeleteManifest(
         pending.allManifests(table.io()).get(2),
@@ -538,7 +537,7 @@ public class TestRewriteFiles extends TestBase {
             .newRewrite()
             .validateFromSnapshot(latestSnapshot(table, branch).snapshotId())
             .rewriteFiles(
-                ImmutableSet.of(FILE_A),
+                ImmutableSet.of(FILE_A, FILE_B, FILE_C),
                 ImmutableSet.of(fileADeletes(), fileBDeletes()),
                 ImmutableSet.of(FILE_D),
                 ImmutableSet.of());
@@ -553,9 +552,9 @@ public class TestRewriteFiles extends TestBase {
 
     validateManifestEntries(
         manifest2,
-        ids(pending.snapshotId(), baseSnapshotId, baseSnapshotId),
+        ids(pending.snapshotId(), pending.snapshotId(), pending.snapshotId()),
         files(FILE_A, FILE_B, FILE_C),
-        statuses(DELETED, EXISTING, EXISTING));
+        statuses(DELETED, DELETED, DELETED));
 
     validateDeleteManifest(
         manifest3,
@@ -743,6 +742,74 @@ public class TestRewriteFiles extends TestBase {
         .hasMessage("Missing required files to delete: /path/to/data-a.parquet");
 
     assertThat(listManifestFiles()).hasSize(3);
+  }
+
+  @TestTemplate
+  public void testRewriteFilesOnlyDeleteFileRemovedFails() {
+    assumeThat(formatVersion).isGreaterThan(1);
+    commit(table, table.newRowDelta().addRows(FILE_A).addDeletes(fileADeletes()), branch);
+
+    // Apply and commit the rewrite transaction.
+    RewriteFiles rewrite =
+        table
+            .newRewrite()
+            .validateFromSnapshot(latestSnapshot(table, branch).snapshotId())
+            .deleteFile(fileADeletes());
+    assertThatThrownBy(() -> commit(table, rewrite, branch))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Replaced row count should equal added row count");
+  }
+
+  @TestTemplate
+  public void testRewriteFilesRewrittenRecordCountsDifferent() {
+    commit(table, table.newRowDelta().addRows(FILE_A).addRows(FILE_B), branch);
+
+    RewriteFiles rewrite =
+        table
+            .newRewrite()
+            .validateFromSnapshot(latestSnapshot(table, branch).snapshotId())
+            .deleteFile(FILE_B);
+    assertThatThrownBy(() -> commit(table, rewrite, branch))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Replaced row count should equal added row count");
+  }
+
+  @TestTemplate
+  public void testRewriteFilesRewrittenRecordCountsEqual() {
+    assumeThat(formatVersion).isGreaterThan(1);
+    commit(
+        table,
+        table.newRowDelta().addRows(FILE_A).addRows(FILE_B).addDeletes(fileBDeletes()),
+        branch);
+    // Compact A + B and B's deletes into C
+    RewriteFiles rewrite =
+        table
+            .newRewrite()
+            .validateFromSnapshot(latestSnapshot(table, branch).snapshotId())
+            .addFile(FILE_C)
+            .deleteFile(FILE_A)
+            .deleteFile(FILE_B)
+            .deleteFile(fileBDeletes());
+
+    Snapshot pending = apply(rewrite, branch);
+
+    validateManifestEntries(
+        pending.dataManifests(table.io()).get(0),
+        ids(pending.snapshotId()),
+        files(FILE_C),
+        statuses(ADDED));
+    validateManifestEntries(
+        pending.dataManifests(table.io()).get(1),
+        ids(pending.snapshotId(), pending.snapshotId()),
+        files(FILE_A, FILE_B),
+        statuses(DELETED, DELETED));
+    validateDeleteManifest(
+        pending.deleteManifests(table.io()).get(0),
+        dataSeqs(1L),
+        fileSeqs(1L),
+        ids(pending.snapshotId()),
+        files(fileBDeletes()),
+        statuses(DELETED));
   }
 
   @TestTemplate

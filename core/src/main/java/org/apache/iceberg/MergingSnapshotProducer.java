@@ -161,6 +161,16 @@ abstract class MergingSnapshotProducer<ThisT> extends SnapshotProducer<ThisT> {
         .collect(ImmutableList.toImmutableList());
   }
 
+  protected List<DeleteFile> addedDeleteFiles() {
+    return newDeleteFilesBySpec.values().stream()
+        .flatMap(Set::stream)
+        .collect(ImmutableList.toImmutableList());
+  }
+
+  protected Set<DeleteFile> replacedDeleteFiles() {
+    return deleteFilterManager.deleteFiles();
+  }
+
   protected void failAnyDelete() {
     filterManager.failAnyDelete();
     deleteFilterManager.failAnyDelete();

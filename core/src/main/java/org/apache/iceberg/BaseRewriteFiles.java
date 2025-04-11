@@ -19,13 +19,19 @@
 package org.apache.iceberg;
 
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
 import org.apache.iceberg.util.DataFileSet;
 
 class BaseRewriteFiles extends MergingSnapshotProducer<RewriteFiles> implements RewriteFiles {
   private final DataFileSet replacedDataFiles = DataFileSet.create();
+  private final AtomicLong replacedDataFileRowCount = new AtomicLong();
+  private final AtomicLong addedDataFileRowCount = new AtomicLong();
+  private final AtomicLong replacedDeleteFileRowCount = new AtomicLong();
+  private final AtomicLong addedDeleteFileRowCount = new AtomicLong();
   private Long startingSnapshotId = null;
+  private boolean canValidateRowCountUnchanged = true;
 
   BaseRewriteFiles(String tableName, TableOperations ops) {
     super(tableName, ops);
@@ -47,6 +53,7 @@ class BaseRewriteFiles extends MergingSnapshotProducer<RewriteFiles> implements 
   @Override
   public RewriteFiles deleteFile(DataFile dataFile) {
     replacedDataFiles.add(dataFile);
+    replacedDataFileRowCount.getAndAdd(dataFile.recordCount());
     delete(dataFile);
     return self();
   }
@@ -54,24 +61,38 @@ class BaseRewriteFiles extends MergingSnapshotProducer<RewriteFiles> implements 
   @Override
   public RewriteFiles deleteFile(DeleteFile deleteFile) {
     delete(deleteFile);
+    replacedDeleteFileRowCount.getAndAdd(deleteFile.recordCount());
     return self();
   }
 
   @Override
   public RewriteFiles addFile(DataFile dataFile) {
     add(dataFile);
+    addedDataFileRowCount.getAndAdd(dataFile.recordCount());
     return self();
   }
 
   @Override
   public RewriteFiles addFile(DeleteFile deleteFile) {
     add(deleteFile);
+    if (deleteFile.content() == FileContent.EQUALITY_DELETES) {
+      canValidateRowCountUnchanged = false;
+    } else {
+      addedDeleteFileRowCount.getAndAdd(deleteFile.recordCount());
+    }
+
     return self();
   }
 
   @Override
   public RewriteFiles addFile(DeleteFile deleteFile, long dataSequenceNumber) {
     add(deleteFile, dataSequenceNumber);
+    if (deleteFile.content() == FileContent.EQUALITY_DELETES) {
+      canValidateRowCountUnchanged = false;
+    } else {
+      addedDeleteFileRowCount.getAndAdd(deleteFile.recordCount());
+    }
+
     return self();
   }
 
@@ -152,5 +173,12 @@ class BaseRewriteFiles extends MergingSnapshotProducer<RewriteFiles> implements 
     Preconditions.checkArgument(
         deletesDeleteFiles() || !addsDeleteFiles(),
         "Delete files to add must be empty because there's no delete file to be rewritten");
+
+    if (canValidateRowCountUnchanged) {
+      long rowsToReplace = replacedDataFileRowCount.get() - replacedDeleteFileRowCount.get();
+      long rowsToAdd = addedDataFileRowCount.get() - addedDeleteFileRowCount.get();
+      Preconditions.checkArgument(
+          rowsToReplace == rowsToAdd, "Replaced row count should equal added row count");
+    }
   }
 }
