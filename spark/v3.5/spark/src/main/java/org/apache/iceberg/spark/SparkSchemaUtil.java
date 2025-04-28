@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.iceberg.MetadataColumns;
@@ -31,6 +32,8 @@ import org.apache.iceberg.Schema;
 import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.iceberg.expressions.Binder;
 import org.apache.iceberg.expressions.Expression;
+import org.apache.iceberg.expressions.Expressions;
+import org.apache.iceberg.expressions.Literal;
 import org.apache.iceberg.relocated.com.google.common.base.Splitter;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
@@ -42,7 +45,9 @@ import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalog.Column;
 import org.apache.spark.sql.types.DataType;
+import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 
 /** Helper methods for working with Spark/Hive metadata. */
 public class SparkSchemaUtil {
@@ -125,6 +130,47 @@ public class SparkSchemaUtil {
   public static Schema convert(StructType sparkType) {
     Type converted = SparkTypeVisitor.visit(sparkType, new SparkTypeToType(sparkType));
     return new Schema(converted.asNestedType().asStructType().fields());
+  }
+
+  public static Schema convert(List<org.apache.spark.sql.connector.catalog.Column> columns) {
+    List<Types.NestedField> fields = Lists.newArrayList();
+    int id = 0;
+    for (org.apache.spark.sql.connector.catalog.Column column : columns) {
+      fields.add(convertColumnToField(column, ++id));
+    }
+
+    return TypeUtil.assignFreshIds(new Schema(fields), new AtomicInteger(0)::incrementAndGet);
+  }
+
+  private static Types.NestedField convertColumnToField(
+      org.apache.spark.sql.connector.catalog.Column column, int id) {
+    Type type = convert(column.dataType());
+    Types.NestedField.Builder builder;
+    if (column.nullable()) {
+      builder = Types.NestedField.optional(column.name()).ofType(type);
+    } else {
+      builder = Types.NestedField.required(column.name()).ofType(type);
+    }
+
+    if (column.defaultValue() != null) {
+      Literal<?> icebergLiteral = convertLiteral(column.defaultValue().getValue());
+      builder = builder.withInitialDefault(icebergLiteral).withWriteDefault(icebergLiteral);
+    }
+
+    if (column.comment() != null) {
+      builder = builder.withDoc(column.comment());
+    }
+
+    return builder.withId(id).build();
+  }
+
+  static Literal<?> convertLiteral(org.apache.spark.sql.connector.expressions.Literal<?> literal) {
+    if (literal.value() instanceof UTF8String) {
+      return Expressions.lit(((UTF8String) literal.value()).toString());
+    } else if (literal.value() instanceof Decimal) {
+      return Expressions.lit(((Decimal) literal.value()).toJavaBigDecimal());
+    }
+    return Expressions.lit(literal.value());
   }
 
   /**

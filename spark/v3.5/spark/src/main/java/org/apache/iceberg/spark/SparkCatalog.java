@@ -76,6 +76,7 @@ import org.apache.spark.sql.catalyst.analysis.NoSuchTableException;
 import org.apache.spark.sql.catalyst.analysis.NoSuchViewException;
 import org.apache.spark.sql.catalyst.analysis.TableAlreadyExistsException;
 import org.apache.spark.sql.catalyst.analysis.ViewAlreadyExistsException;
+import org.apache.spark.sql.connector.catalog.Column;
 import org.apache.spark.sql.connector.catalog.Identifier;
 import org.apache.spark.sql.connector.catalog.NamespaceChange;
 import org.apache.spark.sql.connector.catalog.StagedTable;
@@ -241,6 +242,25 @@ public class SparkCatalog extends BaseCatalog {
       org.apache.iceberg.Table icebergTable =
           builder
               .withPartitionSpec(Spark3Util.toPartitionSpec(icebergSchema, transforms))
+              .withLocation(properties.get("location"))
+              .withProperties(Spark3Util.rebuildCreateProperties(properties))
+              .create();
+      return new SparkTable(icebergTable, !cacheEnabled);
+    } catch (AlreadyExistsException e) {
+      throw new TableAlreadyExistsException(ident);
+    }
+  }
+
+  @Override
+  public Table createTable(
+      Identifier ident, Column[] columns, Transform[] partitions, Map<String, String> properties)
+      throws TableAlreadyExistsException, NoSuchNamespaceException {
+    Schema icebergSchema = SparkSchemaUtil.convert(Arrays.asList(columns));
+    try {
+      Catalog.TableBuilder builder = newBuilder(ident, icebergSchema);
+      org.apache.iceberg.Table icebergTable =
+          builder
+              .withPartitionSpec(Spark3Util.toPartitionSpec(icebergSchema, partitions))
               .withLocation(properties.get("location"))
               .withProperties(Spark3Util.rebuildCreateProperties(properties))
               .create();

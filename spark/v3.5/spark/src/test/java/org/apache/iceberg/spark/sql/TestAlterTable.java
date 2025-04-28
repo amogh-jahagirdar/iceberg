@@ -24,8 +24,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assumptions.assumeThat;
 
+import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.List;
+import org.apache.iceberg.Schema;
+import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.expressions.Expressions;
+import org.apache.iceberg.expressions.Literal;
 import org.apache.iceberg.hadoop.HadoopCatalog;
 import org.apache.iceberg.spark.CatalogTestBase;
 import org.apache.iceberg.types.Types;
@@ -319,6 +326,121 @@ public class TestAlterTable extends CatalogTestBase {
           .isInstanceOf(UnsupportedOperationException.class)
           .hasMessageStartingWith(
               "Cannot specify the '%s' because it's a reserved table property", reservedProp);
+    }
+  }
+
+  @TestTemplate
+  public void testAddColumnWithDefaultValues() {
+    // {type, default value, explicitly inserted value}
+    Object[][] cases =
+        new Object[][] {
+          {"int", 42, 99},
+          {"bigint", 123456789L, 987654321L},
+          {"float", 3.14f, 9.81f},
+          {"double", 2.71828, 1.618},
+          {
+            "decimal(9,2)",
+            new BigDecimal("123.45"),
+            new BigDecimal("99.99")
+          },
+          {"string", "DEFAULT_STRING", "EXPLICIT_STRING"},
+          {"boolean", true, false}
+        };
+
+    for (Object[] testCase : cases) {
+      String columnType = (String) testCase[0];
+      Object defaultValue = testCase[1];
+      Object explicitInsertedValue = testCase[2];
+      String table = String.format("%s_addcol_default", tableName);
+
+      try {
+        sql("CREATE TABLE %s (id INT) USING iceberg", table);
+        sql("ALTER TABLE %s SET TBLPROPERTIES ('format-version'='3')", table);
+        sql("INSERT INTO %s VALUES (1)", table);
+        sql("INSERT INTO %s VALUES (2)", table);
+
+        String defaultValueSql = defaultValue.toString();
+        if (columnType.equals("boolean")) {
+          defaultValueSql = "true";
+        } else if (columnType.equals("string")) {
+          defaultValueSql = "'DEFAULT_STRING'";
+        }
+
+        // Add new column with default
+        sql("ALTER TABLE %s ADD COLUMN new_col %s DEFAULT %s", table, columnType, defaultValueSql);
+        Schema updatedSchema = validationCatalog.loadTable(TableIdentifier.of("default", "table_addcol_default")).schema();
+        Types.NestedField newField = updatedSchema.findField("new_col");
+        assertThat(newField).as("New field should exist").isNotNull();
+        assertThat(newField.initialDefault()).isEqualTo(defaultValue);
+        assertThat(newField.writeDefault()).isEqualTo(defaultValue);
+
+        // Insert explicit and default values
+        String explicitValSql =
+            columnType.equals("boolean")
+                ? "false"
+                : (columnType.equals("string")
+                    ? "'EXPLICIT_STRING'"
+                    : explicitInsertedValue.toString());
+        sql("INSERT INTO %s VALUES (3, %s)", table, explicitValSql);
+        sql("INSERT INTO %s VALUES (4, DEFAULT)", table);
+
+        List<Object[]> expectedRows =
+            Arrays.asList(
+                row(1, defaultValue),
+                row(2, defaultValue),
+                row(3, explicitInsertedValue),
+                row(4, defaultValue));
+
+        List<Object[]> actualRows = sql("SELECT * FROM %s ORDER BY id", table);
+
+        assertEquals(
+            String.format(
+                "Rows did not match for type: %s (default: %s, explicit: %s)",
+                columnType, defaultValue, explicitInsertedValue),
+            expectedRows,
+            actualRows);
+      } finally {
+        sql("DROP TABLE IF EXISTS %s", table);
+      }
+    }
+  }
+
+  @TestTemplate
+  public void testAddStructColumnWithNestedFieldDefaults() {
+    String structType = "struct<a:int,b:int>";
+    String defaultSql = "STRUCT(10 AS a, 20 AS b)";
+    Object expectedDefault = row(10, 20);
+    Object explicitValue = row(99, 100);
+
+    String sanitizedType = structType.replaceAll("[^a-zA-Z]", "_");
+    String table = String.format("%s_struct_%s", tableName, sanitizedType);
+
+    try {
+      // 1. Create table with struct column and default
+      sql("CREATE TABLE %s (id INT) USING iceberg", table);
+      sql("INSERT INTO %s VALUES (1)", table);
+      sql("INSERT INTO %s VALUES (2)", table);
+
+      sql("ALTER TABLE %s ADD COLUMN data %s DEFAULT %s", table, structType, defaultSql);
+
+      // 2. Insert one explicit, one with DEFAULT keyword
+
+      sql("INSERT INTO %s VALUES (3, STRUCT(99 AS a, 100 AS b))", table);
+      sql("INSERT INTO %s VALUES (4, DEFAULT)", table);
+
+      // 3. Verify results
+      List<Object[]> expected = Arrays.asList(
+              row(1, expectedDefault),
+              row(2, expectedDefault),
+              row(3, explicitValue),
+              row(4, expectedDefault)
+      );
+
+      List<Object[]> actual = sql("SELECT * FROM %s ORDER BY id", table);
+      assertEquals("Struct values mismatch for: " + structType, expected, actual);
+
+    } finally {
+      sql("DROP TABLE IF EXISTS %s", table);
     }
   }
 }

@@ -37,6 +37,7 @@ import org.apache.spark.sql.catalyst.analysis.TableAlreadyExistsException;
 import org.apache.spark.sql.catalyst.analysis.ViewAlreadyExistsException;
 import org.apache.spark.sql.connector.catalog.CatalogExtension;
 import org.apache.spark.sql.connector.catalog.CatalogPlugin;
+import org.apache.spark.sql.connector.catalog.Column;
 import org.apache.spark.sql.connector.catalog.FunctionCatalog;
 import org.apache.spark.sql.connector.catalog.Identifier;
 import org.apache.spark.sql.connector.catalog.NamespaceChange;
@@ -185,6 +186,19 @@ public class SparkSessionCatalog<
     } else {
       // delegate to the session catalog
       return getSessionCatalog().createTable(ident, schema, partitions, properties);
+    }
+  }
+
+  @Override
+  public Table createTable(
+      Identifier ident, Column[] columns, Transform[] partitions, Map<String, String> properties)
+      throws TableAlreadyExistsException, NoSuchNamespaceException {
+    String provider = properties.get("provider");
+    if (useIceberg(provider)) {
+      return icebergCatalog.createTable(ident, columns, partitions, properties);
+    } else {
+      // delegate to the session catalog
+      return getSessionCatalog().createTable(ident, columns, partitions, properties);
     }
   }
 
@@ -360,8 +374,6 @@ public class SparkSessionCatalog<
         && sparkSessionCatalog instanceof FunctionCatalog
         && sparkSessionCatalog instanceof SupportsNamespaces) {
       this.sessionCatalog = (T) sparkSessionCatalog;
-    } else {
-      throw new IllegalArgumentException("Invalid session catalog: " + sparkSessionCatalog);
     }
   }
 
