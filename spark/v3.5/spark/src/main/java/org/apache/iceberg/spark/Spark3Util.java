@@ -234,8 +234,18 @@ public class Spark3Util {
         "Incompatible change: cannot add required column: %s",
         leafName(add.fieldNames()));
     Type type = SparkSchemaUtil.convert(add.dataType());
+    // If the type is a struct, we have to set the individual field default values
+    org.apache.iceberg.expressions.Literal<?> defaultValue =
+        add.defaultValue() != null
+            ? SparkSchemaUtil.convertLiteral(add.defaultValue().getValue())
+            : null;
+
     pendingUpdate.addColumn(
-        parentName(add.fieldNames()), leafName(add.fieldNames()), type, add.comment());
+        parentName(add.fieldNames()),
+        leafName(add.fieldNames()),
+        type,
+        add.comment(),
+        defaultValue);
 
     if (add.position() instanceof TableChange.After) {
       TableChange.After after = (TableChange.After) add.position();

@@ -38,6 +38,7 @@ import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.EnvironmentContext;
 import org.apache.iceberg.HasTableOperations;
 import org.apache.iceberg.MetadataTableType;
+import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.SnapshotRef;
@@ -76,6 +77,7 @@ import org.apache.spark.sql.catalyst.analysis.NoSuchTableException;
 import org.apache.spark.sql.catalyst.analysis.NoSuchViewException;
 import org.apache.spark.sql.catalyst.analysis.TableAlreadyExistsException;
 import org.apache.spark.sql.catalyst.analysis.ViewAlreadyExistsException;
+import org.apache.spark.sql.connector.catalog.Column;
 import org.apache.spark.sql.connector.catalog.Identifier;
 import org.apache.spark.sql.connector.catalog.NamespaceChange;
 import org.apache.spark.sql.connector.catalog.StagedTable;
@@ -236,11 +238,27 @@ public class SparkCatalog extends BaseCatalog {
       Identifier ident, StructType schema, Transform[] transforms, Map<String, String> properties)
       throws TableAlreadyExistsException {
     Schema icebergSchema = SparkSchemaUtil.convert(schema);
+    PartitionSpec spec = Spark3Util.toPartitionSpec(icebergSchema, transforms);
+    return createIcebergTable(ident, icebergSchema, spec, properties);
+  }
+
+  @Override
+  public Table createTable(
+      Identifier ident, Column[] columns, Transform[] partitions, Map<String, String> properties)
+      throws TableAlreadyExistsException, NoSuchNamespaceException {
+    Schema icebergSchema = SparkSchemaUtil.convert(Arrays.asList(columns));
+    PartitionSpec spec = Spark3Util.toPartitionSpec(icebergSchema, partitions);
+    return createIcebergTable(ident, icebergSchema, spec, properties);
+  }
+
+  private Table createIcebergTable(
+      Identifier ident, Schema schema, PartitionSpec spec, Map<String, String> properties)
+      throws TableAlreadyExistsException {
     try {
-      Catalog.TableBuilder builder = newBuilder(ident, icebergSchema);
+      Catalog.TableBuilder builder = newBuilder(ident, schema);
       org.apache.iceberg.Table icebergTable =
           builder
-              .withPartitionSpec(Spark3Util.toPartitionSpec(icebergSchema, transforms))
+              .withPartitionSpec(spec)
               .withLocation(properties.get("location"))
               .withProperties(Spark3Util.rebuildCreateProperties(properties))
               .create();
