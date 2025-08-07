@@ -356,6 +356,8 @@ project(':iceberg-core') {
     implementation libs.jackson.databind
     implementation libs.caffeine
     implementation libs.roaringbitmap
+    implementation 'org.lz4:lz4-java:1.8.0'
+    implementation 'com.github.luben:zstd-jni:1.5.6-5'
     compileOnly(libs.hadoop3.client) {
       exclude group: 'org.apache.avro', module: 'avro'
       exclude group: 'org.slf4j', module: 'slf4j-log4j12'
