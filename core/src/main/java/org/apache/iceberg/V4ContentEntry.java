@@ -102,6 +102,7 @@ public class V4ContentEntry implements StructLike {
     public Types.NestedField field(Types.NestedField field, Types.NestedField fieldResult) {
 
       int baseId = 10_000 + 200 * field.fieldId();
+      int structId = baseId++;
 
       Types.StructType contentStruct =
               Types.StructType.of(
@@ -112,7 +113,7 @@ public class V4ContentEntry implements StructLike {
                       optional(baseId++, "lower_bound", field.type()),
                       optional(baseId++, "upper_bound", field.type()));
 
-      return Types.NestedField.optional(baseId + 600, field.fieldId() + "_f", contentStruct);
+      return Types.NestedField.optional(structId, field.fieldId() + "_f", contentStruct);
     }
   }
 
