@@ -21,13 +21,20 @@ package org.apache.iceberg.deletes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.BitSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.stream.IntStream;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.io.compress.CompressionCodec;
+import org.apache.hadoop.io.compress.CompressionCodecFactory;
+import org.apache.hadoop.io.compress.CompressionOutputStream;
 import org.apache.iceberg.Parameter;
 import org.apache.iceberg.ParameterizedTestExtension;
 import org.apache.iceberg.Parameters;
@@ -36,6 +43,7 @@ import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.relocated.com.google.common.io.Resources;
 import org.apache.iceberg.util.Pair;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -511,5 +519,31 @@ public class TestRoaringPositionBitmap {
     assertThat(bitmap.cardinality()).isEqualTo(positions.size());
     positions.forEach(position -> assertThat(bitmap.contains(position)).isTrue());
     bitmap.forEach(position -> assertThat(positions.contains(position)).isTrue());
+  }
+
+  @Test
+  public void largeSizeCompressed() throws IOException {
+    CompressionCodec codec = new CompressionCodecFactory(new Configuration()).getCodecByName("lz4");
+    int BIT_COUNT = 1_000_000;
+    
+    Random random = new Random(seed);
+    RoaringPositionBitmap bitmap = new RoaringPositionBitmap();
+    BitSet bitSet = new BitSet();
+    
+    IntStream.range(0, 100_000)
+            .forEach(i -> {
+              int pos = random.nextInt(BIT_COUNT);
+              bitmap.set(pos);
+              bitSet.set(pos);
+            });
+
+    System.out.printf("Roaring Serialized size: %s, Bitset size: %s", bitmap.serializedSizeInBytes(), bitSet.toByteArray().length);
+    ByteArrayOutputStream bout = new ByteArrayOutputStream();
+    CompressionOutputStream cout = codec.createOutputStream(bout);
+
+    cout.write(bitSet.toByteArray());
+    cout.close();
+
+    System.out.println("Compressed bitset size: " + bout.toByteArray().length);
   }
 }

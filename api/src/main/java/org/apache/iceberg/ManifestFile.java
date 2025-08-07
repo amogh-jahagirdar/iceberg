@@ -30,14 +30,17 @@ public interface ManifestFile {
   int PARTITION_SUMMARIES_ELEMENT_ID = 508;
 
   Types.NestedField PATH =
-      required(500, "manifest_path", Types.StringType.get(), "Location URI with FS scheme");
+      required(500, "path", Types.StringType.get(), "Location URI with FS scheme");
   Types.NestedField LENGTH =
-      required(501, "manifest_length", Types.LongType.get(), "Total file size in bytes");
+      required(501, "length", Types.LongType.get(), "Total file size in bytes");
   Types.NestedField SPEC_ID =
       required(502, "partition_spec_id", Types.IntegerType.get(), "Spec ID used to write");
   Types.NestedField MANIFEST_CONTENT =
       optional(
-          517, "content", Types.IntegerType.get(), "Contents of the manifest: 0=data, 1=deletes");
+          517,
+          "content",
+          Types.ListType.ofRequired(521, Types.IntegerType.get()),
+          "Contents of the manifest: 0=data, 1=deletes, 2=manifests");
   Types.NestedField SEQUENCE_NUMBER =
       optional(
           515,
@@ -51,7 +54,7 @@ public interface ManifestFile {
           Types.LongType.get(),
           "Lowest sequence number in the manifest");
   Types.NestedField SNAPSHOT_ID =
-      required(
+      optional(
           503, "added_snapshot_id", Types.LongType.get(), "Snapshot ID that added the manifest");
   Types.NestedField ADDED_FILES_COUNT =
       optional(504, "added_files_count", Types.IntegerType.get(), "Added entry count");
@@ -96,6 +99,38 @@ public interface ManifestFile {
           Types.LongType.get(),
           "Starting row ID to assign to new rows in ADDED data files");
   // next ID to assign: 521
+
+  // New Fields for v4
+  Types.NestedField MANIFEST_STATS =
+      optional(
+          600,
+          "manifest_stats",
+          Types.StructType.of(
+              required(601, "min_sequence_number", Types.LongType.get()),
+              required(602, "added_files_count", Types.IntegerType.get()),
+              required(603, "existing_files_count", Types.IntegerType.get()),
+              required(604, "deleted_files_count", Types.IntegerType.get()),
+              required(605, "added_rows_count", Types.LongType.get()),
+              required(606, "existing_rows_count", Types.LongType.get()),
+              required(607, "deleted_rows_count", Types.LongType.get())));
+
+  Types.NestedField CONTENT_STATS =
+      optional(
+          608,
+          "content_stats",
+          Types.StructType.of(
+              required(609, "size", Types.LongType.get()),
+              required(610, "added_files_count", Types.IntegerType.get()),
+              required(611, "record_count", Types.IntegerType.get()),
+              required(612, "value_count", Types.IntegerType.get()),
+              required(613, "null_value_count", Types.LongType.get()),
+              required(614, "lower_bound", Types.LongType.get()),
+              required(615, "upper_bound", Types.LongType.get())));
+
+  Types.NestedField OFFSETS =
+      optional(616, "offsets", Types.ListType.ofOptional(617, Types.LongType.get()));
+  Types.NestedField EQUALITY_IDS =
+      optional(618, "equality_ids", Types.ListType.ofOptional(619, Types.IntegerType.get()));
 
   Schema SCHEMA =
       new Schema(

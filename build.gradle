@@ -341,6 +341,14 @@ project(':iceberg-common') {
 }
 
 project(':iceberg-core') {
+  sourceSets {
+    jmh {
+      resources {
+        srcDirs += 'build/jmh-generated-resources'
+      }
+    }
+  }
+
   test {
     useJUnitPlatform()
   }
@@ -348,6 +356,7 @@ project(':iceberg-core') {
     api project(':iceberg-api')
     implementation project(':iceberg-common')
     implementation project(path: ':iceberg-bundled-guava', configuration: 'shadow')
+    annotationProcessor group: 'org.openjdk.jmh', name: 'jmh-generator-annprocess', version: "1.37"
     annotationProcessor libs.immutables.value
     compileOnly libs.immutables.value
 
@@ -381,6 +390,10 @@ project(':iceberg-core') {
       exclude group: 'junit'
     }
     testImplementation libs.awaitility
+
+    testRuntimeOnly project(':iceberg-parquet')
+
+    jmhImplementation project(':iceberg-parquet')
   }
 }
 

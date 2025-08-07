@@ -73,6 +73,14 @@ configure(jmhProjects) {
     zip64 = true
   }
 
+  jmhJar {
+    archiveClassifier = 'jmh'
+  }
+
+  dependencies {
+    jmhImplementation files('build/jmh-generated-classes')
+  }
+
   jmhReport {
     jmhResultPath = file(jmhJsonOutputPath)
     jmhReportOutput = file(jmhReportDir)

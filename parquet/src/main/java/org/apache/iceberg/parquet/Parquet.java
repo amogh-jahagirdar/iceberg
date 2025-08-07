@@ -68,7 +68,6 @@ import org.apache.iceberg.InternalData;
 import org.apache.iceberg.MetricsConfig;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
-import org.apache.iceberg.SchemaParser;
 import org.apache.iceberg.SortOrder;
 import org.apache.iceberg.StructLike;
 import org.apache.iceberg.SystemConfigs;
@@ -355,7 +354,7 @@ public class Parquet {
       Preconditions.checkNotNull(name, "Table name is required and cannot be null");
 
       // add the Iceberg schema to keyValueMetadata
-      meta("iceberg.schema", SchemaParser.toJson(schema));
+      // meta("iceberg.schema", SchemaParser.toJson(schema));
 
       // Map Iceberg properties to pass down to the Parquet writer
       Context context = createContextFunc.apply(config);
@@ -389,6 +388,7 @@ public class Parquet {
         }
       }
 
+      set("parquet.column.statistics.enabled", "false");
       set("parquet.avro.write-old-list-structure", "false");
       MessageType type = ParquetSchemaUtil.convert(schema, name, variantShreddingFunc);
 
@@ -431,6 +431,8 @@ public class Parquet {
                 .withWriterVersion(writerVersion)
                 .withPageSize(pageSize)
                 .withPageRowCountLimit(pageRowLimit)
+                .withStatisticsEnabled(false)
+                .withSizeStatisticsEnabled(false)
                 .withDictionaryEncoding(dictionaryEnabled)
                 .withDictionaryPageSize(dictionaryPageSize)
                 .withMinRowCountForPageSizeCheck(rowGroupCheckMinRecordCount)
