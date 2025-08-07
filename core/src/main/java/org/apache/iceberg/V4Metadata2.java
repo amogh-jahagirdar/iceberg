@@ -18,15 +18,15 @@
  */
 package org.apache.iceberg;
 
-import static org.apache.iceberg.types.Types.NestedField.optional;
-import static org.apache.iceberg.types.Types.NestedField.required;
-
 import java.io.IOException;
 import java.util.Map;
 import org.apache.iceberg.io.FileAppender;
 import org.apache.iceberg.io.OutputFile;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Types;
+
+import static org.apache.iceberg.types.Types.NestedField.optional;
+import static org.apache.iceberg.types.Types.NestedField.required;
 
 class V4Metadata2 {
 
@@ -35,7 +35,6 @@ class V4Metadata2 {
   static Types.NestedField CONTENT_TYPE = required(134, "content_type", Types.IntegerType.get());
   static Types.NestedField DV_CONTENT = optional(146, "dv_content", Types.BinaryType.get());
   static Types.NestedField SEQUENCE_NUMBER = optional(3, "sequence_number", Types.LongType.get());
-  static Types.NestedField MIN_SEQUENCE_NUMBER = optional(516, "min_sequence_number", Types.LongType.get());
 
   private V4Metadata2() {}
 
@@ -46,8 +45,7 @@ class V4Metadata2 {
         CONTENT_TYPE,
         DV_CONTENT,
         V4ContentEntry.fieldFor(dataSchema),
-        SEQUENCE_NUMBER,
-        MIN_SEQUENCE_NUMBER
+        SEQUENCE_NUMBER
     );
   }
 

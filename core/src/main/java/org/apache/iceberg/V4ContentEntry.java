@@ -21,13 +21,13 @@
 
 package org.apache.iceberg;
 
-import static org.apache.iceberg.types.Types.NestedField.optional;
-import static org.apache.iceberg.types.Types.NestedField.required;
-
 import java.util.Arrays;
 import java.util.List;
 import org.apache.iceberg.types.TypeUtil;
 import org.apache.iceberg.types.Types;
+
+import static org.apache.iceberg.types.Types.NestedField.optional;
+import static org.apache.iceberg.types.Types.NestedField.required;
 
 public class V4ContentEntry implements StructLike {
 
@@ -36,7 +36,8 @@ public class V4ContentEntry implements StructLike {
   static Types.NestedField LOCATION = optional(100, "location", Types.StringType.get());
   static Types.NestedField FILE_FORMAT = optional(101, "file_format", Types.StringType.get());
   static Types.NestedField RECORD_COUNT = required(103, "record_count", Types.LongType.get());
-  static Types.NestedField FILE_SIZE = optional(104, "file_size", Types.LongType.get());
+  static Types.NestedField FILE_SIZE = optional(104, "file_size_in_bytes", Types.LongType.get());
+  static Types.NestedField MIN_SEQUENCE_NUMBER = optional(516, "min_sequence_number", Types.LongType.get());
   // content_stats
   static Types.NestedField KEY_METADATA = optional(131, "key_metadata", Types.BinaryType.get());
   static Types.NestedField OFFSETS = optional(132, "offsets", Types.ListType.ofOptional(133, Types.LongType.get()));
@@ -56,7 +57,7 @@ public class V4ContentEntry implements StructLike {
 
   public static Types.NestedField fieldFor(Schema dataSchema) {
     Types.NestedField contentStats = TypeUtil.visit(dataSchema, new ContentStatsSchemaVisitor());
-    Types.NestedField manifestStats = optional(515, "manifest_stats", Types.StructType.of(
+    Types.NestedField manifestStats = optional(521, "manifest_stats", Types.StructType.of(
             ADDED_FILES_COUNT,
             EXISTING_FILES_COUNT,
             DELETED_FILES_COUNT,
@@ -71,6 +72,7 @@ public class V4ContentEntry implements StructLike {
             SPEC_ID,
             RECORD_COUNT,
             FILE_SIZE,
+            MIN_SEQUENCE_NUMBER,
             contentStats,
             manifestStats,
             KEY_METADATA,
@@ -119,6 +121,7 @@ public class V4ContentEntry implements StructLike {
   private FileFormat fileFormat;
   private Long recordCount;
   private Long fileSize;
+  private Long minSequenceNumber;
   private ContentStats contentStats;
   private ManifestStats manifestStats;
   private byte[] keyMetadata;
@@ -142,16 +145,17 @@ public class V4ContentEntry implements StructLike {
       case 2: return partitionSpecId;
       case 3: return recordCount;
       case 4: return fileSize;
-      case 5: return contentStats;
-      case 6: return manifestStats;
-      case 7: return keyMetadata;
-      case 8: return offsets;
-      case 9: return equalityIds;
-      case 10: return sortOrderId;
-      case 11: return firstRowId;
-      case 12: return referencedFile;
-      case 13: return contentOffset;
-      case 14: return contentSize;
+      case 5: return minSequenceNumber;
+      case 6: return contentStats;
+      case 7: return manifestStats;
+      case 8: return keyMetadata;
+      case 9: return offsets;
+      case 10: return equalityIds;
+      case 11: return sortOrderId;
+      case 12: return firstRowId;
+      case 13: return referencedFile;
+      case 14: return contentOffset;
+      case 15: return contentSize;
       default: return null;
     }
   }
@@ -372,6 +376,15 @@ public class V4ContentEntry implements StructLike {
 
   public V4ContentEntry fileSize(Long fileSize) {
     this.fileSize = fileSize;
+    return this;
+  }
+
+  public Long minSequenceNumber() {
+    return minSequenceNumber;
+  }
+
+  public V4ContentEntry minSequenceNumber(Long minSequenceNumber) {
+    this.minSequenceNumber = minSequenceNumber;
     return this;
   }
 

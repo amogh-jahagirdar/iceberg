@@ -95,6 +95,7 @@ public class V4MetadataSimbenchUtil {
     .fileFormat(FileFormat.PARQUET)
      .recordCount(addedRowsCount + existingRowsCount)
     .fileSize(manifestOutputFile.toInputFile().getLength())
+    .minSequenceNumber(sequenceNumber)
     .partitionSpecId(0)
     // Note: Just reuse some stats to populate the fields
     .contentStats(entries.stream().findFirst().get().content().contentStats())
@@ -121,6 +122,7 @@ public class V4MetadataSimbenchUtil {
             .fileFormat(FileFormat.PARQUET)
             .location( String.format("00000-%s-%s-0000-%s.parquet", sequenceNumber, writeUUID, taskId))
             .fileSize((long) ThreadLocalRandom.current().nextInt(8*1024*1024, 128*1024*1024))
+            .minSequenceNumber(sequenceNumber)
             .recordCount((long) ThreadLocalRandom.current().nextInt(10_000, 100_000))
             .contentStats(generateContentStats(schema, statsSupplier))
             .offsets(List.of(0L));
