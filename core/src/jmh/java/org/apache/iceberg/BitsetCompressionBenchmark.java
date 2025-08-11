@@ -34,6 +34,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.io.compress.CompressionCodecFactory;
 import org.apache.iceberg.deletes.RoaringPositionBitmap;
+import org.apache.iceberg.io.IOUtil;
 import org.openjdk.jmh.annotations.AuxCounters;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -45,6 +46,7 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
+import org.openjdk.jmh.annotations.Warmup;
 
 /**
  * ./gradlew :iceberg-core:jmh -PjmhIncludeRegex=BitsetCompressionBenchmark
@@ -163,70 +165,16 @@ public class BitsetCompressionBenchmark {
 
     ByteArrayOutputStream bout = new ByteArrayOutputStream();
     OutputStream compressedOut = compressor.apply(bout);
-    CountingOutputStream out = new CountingOutputStream(compressedOut);
-
-    out.write(bitset.toByteArray());
-    out.close();
-
-    size.numBytes += out.bytes();
-  }
-
-  private static class CountingOutputStream extends OutputStream {
-    private long bytesCount = 0;
-    private OutputStream underlying;
-
-    public CountingOutputStream(OutputStream out) {
-      this.underlying = out;
-    }
-
-    /** Returns the number of bytes written. */
-    public long bytes() {
-      return bytesCount;
-    }
-
-    @Override
-    public void write(byte[] b, int off, int len) throws IOException {
-      underlying.write(b, off, len);
-      bytesCount += len;
-    }
-
-    @Override
-    public void write(int b) throws IOException {
-      underlying.write(b);
-      bytesCount++;
-    }
-
-    @Override
-    public void close() throws IOException {
-      underlying.close();
-    }
-
-    @Override
-    public void flush() throws IOException {
-      underlying.flush();
-    }
+    compressedOut.write(bitset.toByteArray());
+    compressedOut.close();
+    bout.close();
+    size.numBytes += bout.size();
   }
 
   // Mode for set bits generation
   public enum SetMode {
     RANDOM
   }
-
-  // Parameters for clustering
-  //    public static class ClusterConfig {
-  //        public int numClusters;
-  //        public int minClusterSize;
-  //        public int maxClusterSize;
-  //        public int clusterSpread;
-  //
-  //        public ClusterConfig(int numClusters, int minClusterSize, int maxClusterSize, int
-  // clusterSpread) {
-  //            this.numClusters = numClusters;
-  //            this.minClusterSize = minClusterSize;
-  //            this.maxClusterSize = maxClusterSize;
-  //            this.clusterSpread = clusterSpread;
-  //        }
-  //    }
 
   // Generalized bit position generator
   private Set<Integer> generateBitPositions(int bitCount, int n, SetMode mode) {
@@ -238,28 +186,6 @@ public class BitsetCompressionBenchmark {
           positions.add(RANDOM.nextInt(bitCount));
         }
         break;
-
-        //            case CLUSTERED:
-        //                int clusters = clusterConfig != null ? clusterConfig.numClusters : 10;
-        //                // Each cluster start is random, spread out over the bitspace
-        //                int clusterStart = random.nextInt(bitCount - 1);
-        //                for (int c = 0; c < clusters; c++) {
-        //                    int clusterSize = clusterConfig != null
-        //                            ? random.nextInt(clusterConfig.maxClusterSize -
-        // clusterConfig.minClusterSize + 1) + clusterConfig.minClusterSize
-        //                            : 100; // default cluster size
-        //                    for (int i = 0; i < clusterSize && positions.size() < n; i++) {
-        //                        int pos = Math.min(clusterStart + i, bitCount - 1);
-        //                        positions.add(pos);
-        //                    }
-        //                    // Optionally, each cluster is separated by at least clusterSpread
-        //                    if (clusterConfig != null && clusterConfig.clusterSpread > 0) {
-        //                        clusterStart += clusterConfig.clusterSpread;
-        //                    }
-        //                }
-        //                // If not enough due to overlap, fill with randoms
-        //                while (positions.size() < n) positions.add(random.nextInt(bitCount));
-        //                break;
     }
     return positions;
   }
