@@ -358,6 +358,13 @@ project(':iceberg-core') {
     implementation libs.roaringbitmap
     implementation 'org.lz4:lz4-java:1.8.0'
     implementation 'com.github.luben:zstd-jni:1.5.6-5'
+    implementation(libs.parquet.avro) {
+      exclude group: 'org.apache.avro', module: 'avro'
+      // already shaded by Parquet
+      exclude group: 'it.unimi.dsi'
+      exclude group: 'org.codehaus.jackson'
+    }
+
     compileOnly(libs.hadoop3.client) {
       exclude group: 'org.apache.avro', module: 'avro'
       exclude group: 'org.slf4j', module: 'slf4j-log4j12'

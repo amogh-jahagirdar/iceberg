@@ -35,6 +35,8 @@ import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.io.compress.CompressionCodecFactory;
 import org.apache.iceberg.deletes.RoaringPositionBitmap;
 import org.apache.iceberg.io.IOUtil;
+import org.apache.parquet.bytes.DirectByteBufferAllocator;
+import org.apache.parquet.column.values.rle.RunLengthBitPackingHybridEncoder;
 import org.openjdk.jmh.annotations.AuxCounters;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -154,6 +156,25 @@ public class BitsetCompressionBenchmark {
     bout.writeBytes(densePacked);
     bout.close();
     size.numBytes += bout.size();
+  }
+
+  @Benchmark
+  @Threads(1)
+  public void testParquetRLE(CompressedSize size) throws IOException {
+    BitSet bitset = new BitSet(totalBits);
+    for (int position : positions) {
+      bitset.set(position);
+    }
+
+    RunLengthBitPackingHybridEncoder encoder =
+            new RunLengthBitPackingHybridEncoder(32, 1000, 64000, new DirectByteBufferAllocator());
+
+    for (int i = 0; i < bitset.length(); i++) {
+      int value = bitset.get(i) ? 1 : 0;
+      encoder.writeInt(value);
+    }
+
+    size.numBytes += encoder.toBytes().size();
   }
 
   private void testBitsetCompression(
