@@ -19,6 +19,7 @@
 package org.apache.iceberg;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -48,7 +49,7 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
-import org.openjdk.jmh.annotations.Warmup;
+import org.roaringbitmap.RoaringBitmap;
 
 /**
  * ./gradlew :iceberg-core:jmh -PjmhIncludeRegex=BitsetCompressionBenchmark
@@ -87,10 +88,18 @@ public class BitsetCompressionBenchmark {
 
   @Benchmark
   @Threads(1)
-  public void testBitsetCompressionRoaringBitmap(CompressedSize size) {
-    RoaringPositionBitmap bitmap = new RoaringPositionBitmap();
-    positions.forEach(bitmap::set);
-    size.numBytes += bitmap.serializedSizeInBytes();
+  public void testBitsetCompressionRoaringBitmap(CompressedSize size) throws IOException {
+    RoaringBitmap bitmap = new RoaringBitmap();
+    positions.forEach(bitmap::add);
+    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+    DataOutputStream dos = new DataOutputStream(bos);
+    bitmap.runOptimize();
+    bitmap.serialize(dos);
+    bitmap.getSizeInBytes();
+    dos.close();
+    size.numBytes += bos.size();
+    // also first tried the following
+    // size.numBytes += bitmap.serializedSizeInBytes()
   }
 
   @Benchmark
