@@ -34,8 +34,6 @@ import org.apache.commons.compress.compressors.zstandard.ZstdCompressorOutputStr
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.io.compress.CompressionCodecFactory;
-import org.apache.iceberg.deletes.RoaringPositionBitmap;
-import org.apache.iceberg.io.IOUtil;
 import org.apache.parquet.bytes.DirectByteBufferAllocator;
 import org.apache.parquet.column.values.rle.RunLengthBitPackingHybridEncoder;
 import org.openjdk.jmh.annotations.AuxCounters;
@@ -57,7 +55,7 @@ import org.roaringbitmap.RoaringBitmap;
  */
 @Fork(1)
 @State(Scope.Benchmark)
-@Measurement(iterations = 3)
+@Measurement(iterations = 1)
 @BenchmarkMode(Mode.SingleShotTime)
 public class BitsetCompressionBenchmark {
 
@@ -95,11 +93,8 @@ public class BitsetCompressionBenchmark {
     DataOutputStream dos = new DataOutputStream(bos);
     bitmap.runOptimize();
     bitmap.serialize(dos);
-    bitmap.getSizeInBytes();
     dos.close();
     size.numBytes += bos.size();
-    // also first tried the following
-    // size.numBytes += bitmap.serializedSizeInBytes()
   }
 
   @Benchmark
