@@ -24,6 +24,7 @@ if (project.hasProperty('release') && jdkVersion != '11') {
 subprojects {
   def isBom = it.name == 'iceberg-bom'
   def isOpenApi = it.name == 'iceberg-open-api'
+  def isCore = it.name == 'iceberg-core'
 
   apply plugin: 'maven-publish'
   apply plugin: 'signing'
@@ -52,6 +53,9 @@ subprojects {
         archives javadocJar
         archives testJar
         testArtifacts testJar
+        if (isCore) {
+          archives jmhJar
+        }
       }
 
       // add LICENSE and NOTICE
@@ -86,6 +90,10 @@ subprojects {
             artifact sourceJar
             artifact javadocJar
             artifact testJar
+
+            if (isCore) {
+              artifact jmhJar
+            }
 
             versionMapping {
               allVariants {

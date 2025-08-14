@@ -44,7 +44,6 @@ import org.apache.iceberg.expressions.Expressions;
 import org.apache.iceberg.io.BulkDeletionFailureException;
 import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.io.PositionOutputStream;
-import org.apache.iceberg.io.SupportsBulkOperations;
 import org.apache.iceberg.puffin.Blob;
 import org.apache.iceberg.puffin.Puffin;
 import org.apache.iceberg.puffin.PuffinWriter;
@@ -1589,7 +1588,7 @@ public class TestRemoveSnapshots extends TestBase {
 
   @TestTemplate
   public void testRemoveFromTableWithBulkIO() {
-    TestBulkLocalFileIO spyFileIO = Mockito.spy(new TestBulkLocalFileIO());
+    TestTables.TestBulkLocalFileIO spyFileIO = Mockito.spy(new TestTables.TestBulkLocalFileIO());
 
     Mockito.doNothing().when(spyFileIO).deleteFiles(any());
 
@@ -1598,7 +1597,7 @@ public class TestRemoveSnapshots extends TestBase {
 
   @TestTemplate
   public void testBulkDeletionWithBulkDeletionFailureException() {
-    TestBulkLocalFileIO spyFileIO = Mockito.spy(new TestBulkLocalFileIO());
+    TestTables.TestBulkLocalFileIO spyFileIO = Mockito.spy(new TestTables.TestBulkLocalFileIO());
 
     Mockito.doThrow(new BulkDeletionFailureException(2))
         .doNothing()
@@ -1610,7 +1609,7 @@ public class TestRemoveSnapshots extends TestBase {
 
   @TestTemplate
   public void testBulkDeletionWithRuntimeException() {
-    TestBulkLocalFileIO spyFileIO = Mockito.spy(new TestBulkLocalFileIO());
+    TestTables.TestBulkLocalFileIO spyFileIO = Mockito.spy(new TestTables.TestBulkLocalFileIO());
 
     Mockito.doThrow(new RuntimeException("Exception when bulk deleting"))
         .doNothing()
@@ -1620,7 +1619,7 @@ public class TestRemoveSnapshots extends TestBase {
     runBulkDeleteTest(spyFileIO);
   }
 
-  private void runBulkDeleteTest(TestBulkLocalFileIO spyFileIO) {
+  private void runBulkDeleteTest(TestTables.TestBulkLocalFileIO spyFileIO) {
     String tableName = "tableWithBulkIO";
     Table tableWithBulkIO =
         TestTables.create(
@@ -2022,19 +2021,5 @@ public class TestRemoveSnapshots extends TestBase {
 
   private static void commitPartitionStats(Table table, PartitionStatisticsFile statisticsFile) {
     table.updatePartitionStatistics().setPartitionStatistics(statisticsFile).commit();
-  }
-
-  private static class TestBulkLocalFileIO extends TestTables.LocalFileIO
-      implements SupportsBulkOperations {
-
-    @Override
-    public void deleteFile(String path) {
-      throw new RuntimeException("Expected to call the bulk delete interface.");
-    }
-
-    @Override
-    public void deleteFiles(Iterable<String> pathsToDelete) throws BulkDeletionFailureException {
-      throw new RuntimeException("Expected to mock this function");
-    }
   }
 }

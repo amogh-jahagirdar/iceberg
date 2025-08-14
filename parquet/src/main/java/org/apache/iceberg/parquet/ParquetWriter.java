@@ -116,10 +116,8 @@ class ParquetWriter<T> implements FileAppender<T>, Closeable {
                 writeMode,
                 targetRowGroupSize,
                 0,
-                columnIndexTruncateLength,
-                ParquetProperties.DEFAULT_STATISTICS_TRUNCATE_LENGTH,
-                ParquetProperties.DEFAULT_PAGE_WRITE_CHECKSUM_ENABLED,
-                fileEncryptor);
+                null,
+                props);
       } catch (IOException e) {
         throw new UncheckedIOException("Failed to create Parquet file", e);
       }

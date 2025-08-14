@@ -126,6 +126,8 @@ public class InternalData {
      */
     WriteBuilder meta(String property, String value);
 
+    WriteBuilder metricsConfig(MetricsConfig newMetricsConfig);
+
     /**
      * Set a file metadata properties from a Map.
      *

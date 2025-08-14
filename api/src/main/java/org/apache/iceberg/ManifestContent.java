@@ -21,7 +21,8 @@ package org.apache.iceberg;
 /** Content type stored in a manifest file, either DATA or DELETES. */
 public enum ManifestContent {
   DATA(0),
-  DELETES(1);
+  DELETES(1),
+  MANIFESTS(2);
 
   private final int id;
 
@@ -39,6 +40,8 @@ public enum ManifestContent {
         return DATA;
       case 1:
         return DELETES;
+      case 2:
+        return MANIFESTS;
     }
     throw new IllegalArgumentException("Unknown manifest content: " + id);
   }
