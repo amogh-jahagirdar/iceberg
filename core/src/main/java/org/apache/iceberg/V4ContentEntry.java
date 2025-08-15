@@ -1,72 +1,85 @@
 /*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- *  * Licensed to the Apache Software Foundation (ASF) under one
- *  * or more contributor license agreements.  See the NOTICE file
- *  * distributed with this work for additional information
- *  * regarding copyright ownership.  The ASF licenses this file
- *  * to you under the Apache License, Version 2.0 (the
- *  * "License"); you may not use this file except in compliance
- *  * with the License.  You may obtain a copy of the License at
- *  *
- *  *   http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  * Unless required by applicable law or agreed to in writing,
- *  * software distributed under the License is distributed on an
- *  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- *  * KIND, either express or implied.  See the License for the
- *  * specific language governing permissions and limitations
- *  * under the License.
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
-
 package org.apache.iceberg;
+
+import static org.apache.iceberg.types.Types.NestedField.optional;
+import static org.apache.iceberg.types.Types.NestedField.required;
 
 import java.util.Arrays;
 import java.util.List;
 import org.apache.iceberg.types.TypeUtil;
 import org.apache.iceberg.types.Types;
 
-import static org.apache.iceberg.types.Types.NestedField.optional;
-import static org.apache.iceberg.types.Types.NestedField.required;
-
 public class V4ContentEntry implements StructLike {
 
-  static Types.NestedField REFERENCED_FILE = optional(143, "referenced_file", Types.StringType.get());
+  static Types.NestedField REFERENCED_FILE =
+      optional(143, "referenced_file", Types.StringType.get());
   static Types.NestedField SPEC_ID = optional(147, "partition_spec_id", Types.IntegerType.get());
   static Types.NestedField LOCATION = optional(100, "location", Types.StringType.get());
   static Types.NestedField FILE_FORMAT = optional(101, "file_format", Types.StringType.get());
   static Types.NestedField RECORD_COUNT = required(103, "record_count", Types.LongType.get());
   static Types.NestedField FILE_SIZE = optional(104, "file_size_in_bytes", Types.LongType.get());
-  static Types.NestedField MIN_SEQUENCE_NUMBER = optional(516, "min_sequence_number", Types.LongType.get());
+  static Types.NestedField MIN_SEQUENCE_NUMBER =
+      optional(516, "min_sequence_number", Types.LongType.get());
   // content_stats
   static Types.NestedField KEY_METADATA = optional(131, "key_metadata", Types.BinaryType.get());
-  static Types.NestedField OFFSETS = optional(132, "offsets", Types.ListType.ofOptional(133, Types.LongType.get()));
-  static Types.NestedField EQUALITY_IDS = optional(135, "equality_ids", Types.ListType.ofOptional(136, Types.IntegerType.get()));
+  static Types.NestedField OFFSETS =
+      optional(132, "offsets", Types.ListType.ofOptional(133, Types.LongType.get()));
+  static Types.NestedField EQUALITY_IDS =
+      optional(135, "equality_ids", Types.ListType.ofOptional(136, Types.IntegerType.get()));
   static Types.NestedField SORT_ORDER_ID = optional(140, "sort_order_id", Types.IntegerType.get());
   static Types.NestedField FIRST_ROW_ID = optional(142, "first_row_id", Types.LongType.get());
   static Types.NestedField CONTENT_OFFSET = optional(144, "content_offset", Types.LongType.get());
-  static Types.NestedField CONTENT_SIZE_IN_BYTES = optional(145, "content_size_in_bytes", Types.LongType.get());
+  static Types.NestedField CONTENT_SIZE_IN_BYTES =
+      optional(145, "content_size_in_bytes", Types.LongType.get());
   // manifest stats
-  static Types.NestedField ADDED_FILES_COUNT = optional(504, "added_files_count", Types.IntegerType.get());
-  static Types.NestedField EXISTING_FILES_COUNT = optional(505, "existing_files_count", Types.IntegerType.get());
-  static Types.NestedField DELETED_FILES_COUNT = optional(506, "deleted_files_count", Types.IntegerType.get());
-  static Types.NestedField ADDED_ROWS_COUNT = optional(512, "added_rows_count", Types.LongType.get());
-  static Types.NestedField EXISTING_ROWS_COUNT = optional(513, "existing_rows_count", Types.LongType.get());
-  static Types.NestedField DELETED_ROWS_COUNT = optional(514, "deleted_rows_count", Types.LongType.get());
-
+  static Types.NestedField ADDED_FILES_COUNT =
+      optional(504, "added_files_count", Types.IntegerType.get());
+  static Types.NestedField EXISTING_FILES_COUNT =
+      optional(505, "existing_files_count", Types.IntegerType.get());
+  static Types.NestedField DELETED_FILES_COUNT =
+      optional(506, "deleted_files_count", Types.IntegerType.get());
+  static Types.NestedField ADDED_ROWS_COUNT =
+      optional(512, "added_rows_count", Types.LongType.get());
+  static Types.NestedField EXISTING_ROWS_COUNT =
+      optional(513, "existing_rows_count", Types.LongType.get());
+  static Types.NestedField DELETED_ROWS_COUNT =
+      optional(514, "deleted_rows_count", Types.LongType.get());
 
   public static Types.NestedField fieldFor(Schema dataSchema) {
     Types.NestedField contentStats = TypeUtil.visit(dataSchema, new ContentStatsSchemaVisitor());
-    Types.NestedField manifestStats = optional(521, "manifest_stats", Types.StructType.of(
-            ADDED_FILES_COUNT,
-            EXISTING_FILES_COUNT,
-            DELETED_FILES_COUNT,
-            ADDED_ROWS_COUNT,
-            EXISTING_ROWS_COUNT,
-            DELETED_ROWS_COUNT
-    ));
+    Types.NestedField manifestStats =
+        optional(
+            521,
+            "manifest_stats",
+            Types.StructType.of(
+                ADDED_FILES_COUNT,
+                EXISTING_FILES_COUNT,
+                DELETED_FILES_COUNT,
+                ADDED_ROWS_COUNT,
+                EXISTING_ROWS_COUNT,
+                DELETED_ROWS_COUNT));
 
-    return required(2, "content_entry", Types.StructType.of(
+    return required(
+        2,
+        "content_entry",
+        Types.StructType.of(
             LOCATION,
             FILE_FORMAT,
             SPEC_ID,
@@ -82,8 +95,7 @@ public class V4ContentEntry implements StructLike {
             FIRST_ROW_ID,
             REFERENCED_FILE,
             CONTENT_OFFSET,
-            CONTENT_SIZE_IN_BYTES
-    ));
+            CONTENT_SIZE_IN_BYTES));
   }
 
   static class ContentStatsSchemaVisitor extends TypeUtil.SchemaVisitor<Types.NestedField> {
@@ -105,13 +117,13 @@ public class V4ContentEntry implements StructLike {
       int structId = baseId++;
 
       Types.StructType contentStruct =
-              Types.StructType.of(
-                      optional(baseId++, "size", Types.LongType.get()),
-                      optional(baseId++, "record_count", Types.IntegerType.get()),
-                      optional(baseId++, "value_count", Types.IntegerType.get()),
-                      optional(baseId++, "null_value_count", Types.IntegerType.get()),
-                      optional(baseId++, "lower_bound", field.type()),
-                      optional(baseId++, "upper_bound", field.type()));
+          Types.StructType.of(
+              optional(baseId++, "size", Types.LongType.get()),
+              optional(baseId++, "record_count", Types.IntegerType.get()),
+              optional(baseId++, "value_count", Types.IntegerType.get()),
+              optional(baseId++, "null_value_count", Types.IntegerType.get()),
+              optional(baseId++, "lower_bound", field.type()),
+              optional(baseId++, "upper_bound", field.type()));
 
       return Types.NestedField.optional(structId, field.fieldId() + "_f", contentStruct);
     }
@@ -141,23 +153,40 @@ public class V4ContentEntry implements StructLike {
 
   private Object get(int pos) {
     switch (pos) {
-      case 0: return location;
-      case 1: return fileFormat.name();
-      case 2: return partitionSpecId;
-      case 3: return recordCount;
-      case 4: return fileSize;
-      case 5: return minSequenceNumber;
-      case 6: return contentStats;
-      case 7: return manifestStats;
-      case 8: return keyMetadata;
-      case 9: return offsets;
-      case 10: return equalityIds;
-      case 11: return sortOrderId;
-      case 12: return firstRowId;
-      case 13: return referencedFile;
-      case 14: return contentOffset;
-      case 15: return contentSize;
-      default: return null;
+      case 0:
+        return location;
+      case 1:
+        return fileFormat.name();
+      case 2:
+        return partitionSpecId;
+      case 3:
+        return recordCount;
+      case 4:
+        return fileSize;
+      case 5:
+        return minSequenceNumber;
+      case 6:
+        return contentStats;
+      case 7:
+        return manifestStats;
+      case 8:
+        return keyMetadata;
+      case 9:
+        return offsets;
+      case 10:
+        return equalityIds;
+      case 11:
+        return sortOrderId;
+      case 12:
+        return firstRowId;
+      case 13:
+        return referencedFile;
+      case 14:
+        return contentOffset;
+      case 15:
+        return contentSize;
+      default:
+        return null;
     }
   }
 
@@ -177,7 +206,13 @@ public class V4ContentEntry implements StructLike {
     private final Long existingRowsCount;
     private final Long deletedRowsCount;
 
-    public ManifestStats(Integer addedFilesCount, Integer existingFilesCount, Integer deletedFilesCount, Long addRowsCount, Long existingRowsCount, Long deletedRowsCount) {
+    public ManifestStats(
+        Integer addedFilesCount,
+        Integer existingFilesCount,
+        Integer deletedFilesCount,
+        Long addRowsCount,
+        Long existingRowsCount,
+        Long deletedRowsCount) {
       this.addedFilesCount = addedFilesCount;
       this.existingFilesCount = existingFilesCount;
       this.deletedFilesCount = deletedFilesCount;
@@ -193,13 +228,20 @@ public class V4ContentEntry implements StructLike {
 
     private Object get(int pos) {
       switch (pos) {
-        case 0: return addedFilesCount;
-        case 1: return existingFilesCount;
-        case 2: return deletedFilesCount;
-        case 3: return addRowsCount;
-        case 4: return existingRowsCount;
-        case 5: return deletedRowsCount;
-        default: return null;
+        case 0:
+          return addedFilesCount;
+        case 1:
+          return existingFilesCount;
+        case 2:
+          return deletedFilesCount;
+        case 3:
+          return addRowsCount;
+        case 4:
+          return existingRowsCount;
+        case 5:
+          return deletedRowsCount;
+        default:
+          return null;
       }
     }
 
@@ -209,9 +251,7 @@ public class V4ContentEntry implements StructLike {
     }
 
     @Override
-    public <T> void set(int pos, T value) {
-
-    }
+    public <T> void set(int pos, T value) {}
   }
 
   public static class ContentStats implements StructLike {

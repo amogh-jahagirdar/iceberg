@@ -540,7 +540,7 @@ public class JsonUtil {
   }
 
   public static void writeValue(Type.PrimitiveType type, Object value, JsonGenerator gen)
-          throws IOException {
+      throws IOException {
     switch (type.typeId()) {
       case BOOLEAN:
         gen.writeBoolean((Boolean) value);
@@ -566,9 +566,9 @@ public class JsonUtil {
         // use toString in case the value is CharSequence
         gen.writeString(value.toString());
         break;
-      //      case DECIMAL:
-      //        gen.writeNumber((BigDecimal) value);
-      //        break;
+        //      case DECIMAL:
+        //        gen.writeNumber((BigDecimal) value);
+        //        break;
       default:
         throw new UnsupportedEncodingException("Cannot write unsupported type: " + type);
     }

@@ -18,7 +18,6 @@
  */
 package org.apache.iceberg;
 
-
 interface V4ManifestEntry {
 
   ManifestEntry.Status status();
@@ -26,6 +25,8 @@ interface V4ManifestEntry {
   ManifestContent contentType();
 
   V4ContentEntry content();
+
+  byte[] dvContent();
 
   Long sequenceNumber();
 
@@ -37,7 +38,7 @@ interface V4ManifestEntry {
     private ManifestEntry.Status status;
     private Long snapshotId;
     private ManifestContent contentType;
-    private byte[] dv_content;
+    private byte[] dvContent;
     private V4ContentEntry content;
     private Long sequenceNumber;
     private Long minSequenceNumber;
@@ -66,8 +67,18 @@ interface V4ManifestEntry {
       return content;
     }
 
+    @Override
+    public byte[] dvContent() {
+      return dvContent;
+    }
+
     public EntryV4 content(V4ContentEntry content) {
       this.content = content;
+      return this;
+    }
+
+    public EntryV4 dvContent(byte[] dvContent) {
+      this.dvContent = dvContent;
       return this;
     }
 
@@ -125,13 +136,14 @@ interface V4ManifestEntry {
         case 2:
           return contentType.id();
         case 3:
-          return null;
+          return dvContent;
         case 4:
           return content;
         case 5:
           return sequenceNumber;
         case 6:
           return minSequenceNumber;
+
         default:
           return null;
       }
@@ -143,39 +155,39 @@ interface V4ManifestEntry {
     }
   }
 
-//  static EntryV4 create(DataFile entry) {
-//    return new EntryV4()
-//        .content().location(entry.location())
-//        .contentSize(entry.fileSizeInBytes())
-//        .partitionSpecId(entry.specId())
-//        .sequenceNumber(entry.dataSequenceNumber())
-//        .minSequenceNumber(entry.fileSequenceNumber())
-//        .offsets(entry.splitOffsets())
-//        .equalityIds(entry.equalityFieldIds())
-//        .firstRowId(entry.firstRowId());
-//  }
-//
-//  static EntryV4 create(DeleteFile entry) {
-//    return new EntryV4()
-//        .path(entry.location())
-//        .length(entry.fileSizeInBytes())
-//        .specId(entry.specId())
-//        .content(ManifestContent.DELETES)
-//        .sequenceNumber(entry.dataSequenceNumber())
-//        .minSequenceNumber(entry.fileSequenceNumber())
-//        .offsets(entry.splitOffsets())
-//        .equalityIds(entry.equalityFieldIds())
-//        .firstRowId(entry.firstRowId());
-//  }
-//
-//  static EntryV4 create(ManifestFile entry) {
-//    return new EntryV4()
-//        .path(entry.path())
-//        .length(entry.length())
-//        .specId(entry.partitionSpecId())
-//        .content(ManifestContent.MANIFESTS)
-//        .sequenceNumber(entry.sequenceNumber())
-//        .minSequenceNumber(entry.minSequenceNumber())
-//        .firstRowId(entry.firstRowId());
-//  }
+  //  static EntryV4 create(DataFile entry) {
+  //    return new EntryV4()
+  //        .content().location(entry.location())
+  //        .contentSize(entry.fileSizeInBytes())
+  //        .partitionSpecId(entry.specId())
+  //        .sequenceNumber(entry.dataSequenceNumber())
+  //        .minSequenceNumber(entry.fileSequenceNumber())
+  //        .offsets(entry.splitOffsets())
+  //        .equalityIds(entry.equalityFieldIds())
+  //        .firstRowId(entry.firstRowId());
+  //  }
+  //
+  //  static EntryV4 create(DeleteFile entry) {
+  //    return new EntryV4()
+  //        .path(entry.location())
+  //        .length(entry.fileSizeInBytes())
+  //        .specId(entry.specId())
+  //        .content(ManifestContent.DELETES)
+  //        .sequenceNumber(entry.dataSequenceNumber())
+  //        .minSequenceNumber(entry.fileSequenceNumber())
+  //        .offsets(entry.splitOffsets())
+  //        .equalityIds(entry.equalityFieldIds())
+  //        .firstRowId(entry.firstRowId());
+  //  }
+  //
+  //  static EntryV4 create(ManifestFile entry) {
+  //    return new EntryV4()
+  //        .path(entry.path())
+  //        .length(entry.length())
+  //        .specId(entry.partitionSpecId())
+  //        .content(ManifestContent.MANIFESTS)
+  //        .sequenceNumber(entry.sequenceNumber())
+  //        .minSequenceNumber(entry.minSequenceNumber())
+  //        .firstRowId(entry.firstRowId());
+  //  }
 }

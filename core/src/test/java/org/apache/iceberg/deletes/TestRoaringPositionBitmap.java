@@ -525,19 +525,22 @@ public class TestRoaringPositionBitmap {
   public void largeSizeCompressed() throws IOException {
     CompressionCodec codec = new CompressionCodecFactory(new Configuration()).getCodecByName("lz4");
     int BIT_COUNT = 1_000_000;
-    
+
     Random random = new Random(seed);
     RoaringPositionBitmap bitmap = new RoaringPositionBitmap();
     BitSet bitSet = new BitSet();
-    
+
     IntStream.range(0, 100_000)
-            .forEach(i -> {
+        .forEach(
+            i -> {
               int pos = random.nextInt(BIT_COUNT);
               bitmap.set(pos);
               bitSet.set(pos);
             });
 
-    System.out.printf("Roaring Serialized size: %s, Bitset size: %s", bitmap.serializedSizeInBytes(), bitSet.toByteArray().length);
+    System.out.printf(
+        "Roaring Serialized size: %s, Bitset size: %s",
+        bitmap.serializedSizeInBytes(), bitSet.toByteArray().length);
     ByteArrayOutputStream bout = new ByteArrayOutputStream();
     CompressionOutputStream cout = codec.createOutputStream(bout);
 

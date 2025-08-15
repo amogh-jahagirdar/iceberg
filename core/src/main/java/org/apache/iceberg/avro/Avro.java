@@ -166,6 +166,7 @@ public class Avro {
       return this;
     }
 
+    @Override
     public WriteBuilder metricsConfig(MetricsConfig newMetricsConfig) {
       this.metricsConfig = newMetricsConfig;
       return this;

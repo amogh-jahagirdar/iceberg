@@ -18,15 +18,16 @@
  */
 package org.apache.iceberg;
 
+import static org.apache.iceberg.types.Types.NestedField.optional;
+import static org.apache.iceberg.types.Types.NestedField.required;
+
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Map;
 import org.apache.iceberg.io.FileAppender;
 import org.apache.iceberg.io.OutputFile;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Types;
-
-import static org.apache.iceberg.types.Types.NestedField.optional;
-import static org.apache.iceberg.types.Types.NestedField.required;
 
 class V4Metadata2 {
 
@@ -45,8 +46,7 @@ class V4Metadata2 {
         CONTENT_TYPE,
         DV_CONTENT,
         V4ContentEntry.fieldFor(dataSchema),
-        SEQUENCE_NUMBER
-    );
+        SEQUENCE_NUMBER);
   }
 
   static class Writer implements FileAppender<V4ManifestEntry> {

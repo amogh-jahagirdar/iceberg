@@ -22,7 +22,8 @@ package org.apache.iceberg;
 public enum ManifestContent {
   DATA(0),
   DELETES(1),
-  MANIFESTS(2);
+  MANIFESTS(2),
+  MANIFEST_DV(3);
 
   private final int id;
 

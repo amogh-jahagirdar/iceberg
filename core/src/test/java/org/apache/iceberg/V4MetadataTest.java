@@ -66,15 +66,14 @@ class V4MetadataTest {
               .withRecordCount(1)
               .build();
 
-      V4ManifestEntry.EntryV4 entry =  new V4ManifestEntry.EntryV4();
+      V4ManifestEntry.EntryV4 entry = new V4ManifestEntry.EntryV4();
       entry
           .status(ManifestEntry.Status.ADDED)
           .snapshotId(1L)
-
           .sequenceNumber(1L)
-              .content()
-              .fileFormat(FileFormat.PARQUET)
-              .contentStats(simbenchUtil.generateContentStats(schema, statsSupplier));
+          .content()
+          .fileFormat(FileFormat.PARQUET)
+          .contentStats(simbenchUtil.generateContentStats(schema, statsSupplier));
 
       writer.add(entry);
     }
@@ -86,7 +85,8 @@ class V4MetadataTest {
         new Schema(
             optional(1, "s", Types.StringType.get()), optional(2, "i", Types.IntegerType.get()));
 
-    V4ContentEntry.ContentStatsSchemaVisitor visitor = new V4ContentEntry.ContentStatsSchemaVisitor();
+    V4ContentEntry.ContentStatsSchemaVisitor visitor =
+        new V4ContentEntry.ContentStatsSchemaVisitor();
 
     Types.NestedField statsField = TypeUtil.visit(schema, visitor);
 
@@ -99,15 +99,16 @@ class V4MetadataTest {
         new V4Metadata2.Writer(
             Files.localOutput("/tmp/v4/file.avro"), FileFormat.AVRO, new Schema(), 0, 1L, 0, 0L)) {
 
-      V4ManifestEntry.EntryV4 entry = new  V4ManifestEntry.EntryV4();
-      entry.status(ManifestEntry.Status.ADDED)
-              .snapshotId(1L)
-              .sequenceNumber(1L)
-      .content()
-              .location(String.format("00000-%s-%s-0-0000%s.parquet", 0, UUID.randomUUID(), 0))
-              .fileFormat(FileFormat.PARQUET)
-              .fileSize(1024L)
-              .recordCount(1L);
+      V4ManifestEntry.EntryV4 entry = new V4ManifestEntry.EntryV4();
+      entry
+          .status(ManifestEntry.Status.ADDED)
+          .snapshotId(1L)
+          .sequenceNumber(1L)
+          .content()
+          .location(String.format("00000-%s-%s-0-0000%s.parquet", 0, UUID.randomUUID(), 0))
+          .fileFormat(FileFormat.PARQUET)
+          .fileSize(1024L)
+          .recordCount(1L);
 
       writer.add(entry);
     }
