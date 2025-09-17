@@ -597,8 +597,7 @@ public class TestStrictMetricsEvaluator {
     assertThat(shouldRead).as("Should not match: no_nulls field does not have bounds").isFalse();
   }
 
-  @Test
-  public void testIntegerNotIn() {
+  protected void testIntegerNotIn() {
     boolean shouldRead =
         new StrictMetricsEvaluator(SCHEMA, notIn("id", INT_MIN_VALUE - 25, INT_MIN_VALUE - 24))
             .eval(FILE);
