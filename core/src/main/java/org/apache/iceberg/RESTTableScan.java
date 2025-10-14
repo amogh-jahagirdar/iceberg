@@ -18,14 +18,23 @@
  */
 package org.apache.iceberg;
 
+import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.io.CloseableIterable;
+import org.apache.iceberg.io.CloseableIterator;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.rest.ErrorHandlers;
 import org.apache.iceberg.rest.ParserContext;
@@ -37,6 +46,7 @@ import org.apache.iceberg.rest.responses.FetchPlanningResultResponse;
 import org.apache.iceberg.rest.responses.PlanTableScanResponse;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.util.ParallelIterable;
+import org.apache.iceberg.util.ThreadPools;
 
 public class RESTTableScan extends DataTableScan {
   private final RESTClient client;
@@ -47,9 +57,6 @@ public class RESTTableScan extends DataTableScan {
   private final ResourcePaths resourcePaths;
   private final TableIdentifier tableIdentifier;
   private final ParserContext parserContext;
-
-  // Track the current plan ID for cancellation
-  private volatile String currentPlanId = null;
 
   // TODO revisit if this property should be configurable
   // Sleep duration between polling attempts for plan completion
@@ -155,10 +162,9 @@ public class RESTTableScan extends DataTableScan {
     PlanStatus planStatus = response.planStatus();
     switch (planStatus) {
       case COMPLETED:
-        // No need to clear currentPlanId here since it's only set for SUBMITTED plans
-        return getScanTasksIterable(response.planTasks(), response.fileScanTasks());
+        return new FlatteningTaskIterable(response.fileScanTasks(), response.planTasks());
       case SUBMITTED:
-        return fetchPlanningResult(response.planId());
+        return new FlatteningTaskIterable(Lists.newArrayList(), ImmutableList.of(response.planId()));
       case FAILED:
         throw new IllegalStateException(
             "Received \"failed\" status from service when planning a table scan");
@@ -171,188 +177,78 @@ public class RESTTableScan extends DataTableScan {
     }
   }
 
-  private CloseableIterable<FileScanTask> fetchPlanningResult(String planId) {
-    // Set the current plan ID for potential cancellation
-    currentPlanId = planId;
+  static class FetchPlanTask implements Runnable {
+      private final Queue<FileScanTask> results;
+      private final Queue<String> childTasks;
 
-    try {
-      long startTime = System.currentTimeMillis();
-      while (System.currentTimeMillis() - startTime <= MAX_WAIT_TIME_MS) {
-        FetchPlanningResultResponse response =
-            client.get(
-                resourcePaths.plan(tableIdentifier, planId),
-                Map.of(),
-                FetchPlanningResultResponse.class,
-                headers.get(),
-                ErrorHandlers.defaultErrorHandler(),
-                parserContext);
+      FetchPlanTask(String planTask, Queue<FileScanTask> results, Queue<String> childPlanTasks) {
+          this.results = results;
+          this.childTasks = childPlanTasks;
+      }
 
-        PlanStatus planStatus = response.planStatus();
-        switch (planStatus) {
-          case COMPLETED:
-            // Clear plan ID since planning completed successfully
-            currentPlanId = null;
-            return getScanTasksIterable(response.planTasks(), response.fileScanTasks());
-          case SUBMITTED:
-            try {
-              // TODO: if we want to add some jitter here to avoid thundering herd.
-              Thread.sleep(FETCH_PLANNING_SLEEP_DURATION_MS);
-            } catch (InterruptedException e) {
-              Thread.currentThread().interrupt();
-              // Attempt to cancel the plan before exiting
-              cancelPlan();
-              throw new RuntimeException("Interrupted while fetching plan status", e);
-            }
-            break;
-          case FAILED:
-            throw new IllegalStateException(
-                "Received \"failed\" status from service when fetching a table scan");
-          case CANCELLED:
-            throw new IllegalStateException(
-                String.format(
-                    Locale.ROOT,
-                    "Received \"cancelled\" status from service when fetching a table scan, planId: %s is invalid",
-                    planId));
-          default:
-            throw new IllegalStateException(
-                String.format(
-                    Locale.ROOT, "Invalid planStatus during fetchPlanningResult: %s", planStatus));
-        }
+      @Override
+      public void run() {
+          return "";
       }
-      // If we reach here, we've exceeded the max wait time
-      // Attempt to cancel the plan before timing out
-      cancelPlan();
-      throw new IllegalStateException(
-          String.format(
-              Locale.ROOT,
-              "Exceeded max wait time of %d ms when fetching planning result for planId: %s",
-              MAX_WAIT_TIME_MS,
-              planId));
-    } catch (Exception e) {
-      // Clear the plan ID on any exception (except successful completion)
-      // Also attempt to cancel the plan to clean up server resources
-      try {
-        cancelPlan();
-      } catch (Exception cancelException) {
-        // Ignore cancellation failures during exception handling
-        // The original exception is more important
-      }
-      throw e;
-    }
   }
 
-  private CloseableIterable<FileScanTask> getScanTasksIterable(
-      List<String> planTasks, List<FileScanTask> fileScanTasks) {
-    // Create a single global ParallelIterable for all scan tasks
-    ParallelIterable<FileScanTask> parallelIterable =
-        new ParallelIterable<>(Lists.newArrayList(), planExecutor());
+  static class FlatteningTaskIterable implements CloseableIterable<FileScanTask> {
+      private final Queue<FileScanTask> results;
+      private final Queue<String> planTasksToFetch;
+      private final ExecutorService planTaskWorkers = ThreadPools.getWorkerPool();
 
-    // Create shared reference counter to track when all scan tasks are complete
-    ScanTasksReferenceCounter referenceCounter =
-        new ScanTasksReferenceCounterImpl(parallelIterable);
+      FlatteningTaskIterable(List<FileScanTask> tasks, List<String> planTasks) {
+          this.results = new LinkedBlockingQueue<>(Math.max(tasks.size(), 28_000));
+          for (FileScanTask task: tasks) {
+              results.offer(task);
+          }
 
-    if (fileScanTasks != null) {
-      ScanTasksIterable scanTasksIterable =
-          new ScanTasksIterable(
-              fileScanTasks,
-              client,
-              resourcePaths,
-              tableIdentifier,
-              headers,
-              planExecutor(),
-              table.specs(),
-              isCaseSensitive(),
-              this::cancelPlan,
-              parallelIterable,
-              referenceCounter);
-      parallelIterable.addIterable(scanTasksIterable);
-      referenceCounter.increment();
-    }
+          this.planTasksToFetch = new LinkedBlockingQueue<>(Math.max(planTasks.size(), 10));
+          for (String planTask: planTasks) {
+              planTasksToFetch.offer(planTask);
+          }
 
-    if (planTasks != null) {
-      for (String planTask : planTasks) {
-        ScanTasksIterable iterable =
-            new ScanTasksIterable(
-                planTask,
-                client,
-                resourcePaths,
-                tableIdentifier,
-                headers,
-                planExecutor(),
-                table.specs(),
-                isCaseSensitive(),
-                this::cancelPlan,
-                parallelIterable,
-                referenceCounter);
-        parallelIterable.addIterable(iterable);
-        referenceCounter.increment();
+          fetchPlanTasks();
       }
-    }
 
-    // If no iterables were added, finish immediately
-    if ((fileScanTasks == null || fileScanTasks.isEmpty())
-        && (planTasks == null || planTasks.isEmpty())) {
-      parallelIterable.finishAdding();
-    }
-
-    return parallelIterable;
-  }
-
-  // Interface for reference counting
-  interface ScanTasksReferenceCounter {
-    void increment();
-
-    void decrement();
-  }
-
-  // Reference counter to track active ScanTasksIterables
-  private static class ScanTasksReferenceCounterImpl implements ScanTasksReferenceCounter {
-    private final ParallelIterable<FileScanTask> parallelIterable;
-    private volatile int count = 0;
-    private final Object lock = new Object();
-
-    ScanTasksReferenceCounterImpl(ParallelIterable<FileScanTask> parallelIterable) {
-      this.parallelIterable = parallelIterable;
-    }
-
-    @Override
-    public void increment() {
-      synchronized (lock) {
-        count++;
+      @Override
+      public CloseableIterator<FileScanTask> iterator() {
+          return CloseableIterator.withClose(results.iterator());
       }
-    }
 
-    @Override
-    public void decrement() {
-      synchronized (lock) {
-        count--;
-        if (count == 0) {
-          parallelIterable.finishAdding();
-        }
+      @Override
+      public void close() throws IOException {
+          // call close on all the planTasksToFetch
       }
-    }
+
+      private void fetchPlanTasks() {
+          for (int i = 0; i < ThreadPools.WORKER_THREAD_POOL_SIZE; i++) {
+              planTaskWorkers.submit(new Runnable() {
+                  @Override
+                  public void run() {
+                      try {
+                          while(true) {
+                              String planTask = planTasksToFetch.poll();
+                              // Nothing on the queue
+                              if (planTask == null) {
+                                  break;
+                              }
+
+                              CloseableIterable<FileScanTask> tasks = fetchPl
+                          }
+                      } catch (InterruptedException e) {
+                          Thread.currentThread().interrupt();
+                      }
+                  }
+              });
+          }
+      }
   }
 
   @VisibleForTesting
   @SuppressWarnings("checkstyle:RegexpMultiline")
   public boolean cancelPlan() {
-    String planId = currentPlanId;
-    if (planId == null) {
-      return false;
-    }
-
-    try {
-      client.delete(
-          resourcePaths.plan(tableIdentifier, planId),
-          Map.of(),
-          null,
-          headers.get(),
-          ErrorHandlers.defaultErrorHandler());
-      currentPlanId = null;
+      // Go through any open work items and cancel those
       return true;
-    } catch (Exception e) {
-      // Plan might have already completed or failed, which is acceptable
-      return false;
-    }
   }
 }
