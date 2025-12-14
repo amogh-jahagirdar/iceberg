@@ -23,13 +23,16 @@ import java.util.Map;
 import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.PartitionSpec;
+import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
+import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.rest.RESTResponse;
+import org.apache.iceberg.util.DeleteFileSet;
 
 public abstract class BaseScanTaskResponse implements RESTResponse {
 
   private final List<String> planTasks;
   private final List<FileScanTask> fileScanTasks;
-  private final List<DeleteFile> deleteFiles;
+  private final DeleteFileSet deleteFiles;
   private final Map<Integer, PartitionSpec> specsById;
 
   protected BaseScanTaskResponse(
@@ -39,7 +42,7 @@ public abstract class BaseScanTaskResponse implements RESTResponse {
       Map<Integer, PartitionSpec> specsById) {
     this.planTasks = planTasks;
     this.fileScanTasks = fileScanTasks;
-    this.deleteFiles = deleteFiles;
+    this.deleteFiles = deleteFiles == null ? null : DeleteFileSet.of(deleteFiles);
     this.specsById = specsById;
   }
 
@@ -52,7 +55,7 @@ public abstract class BaseScanTaskResponse implements RESTResponse {
   }
 
   public List<DeleteFile> deleteFiles() {
-    return deleteFiles;
+    return deleteFiles == null ? null : Lists.newArrayList(deleteFiles.iterator());
   }
 
   /**
@@ -66,7 +69,7 @@ public abstract class BaseScanTaskResponse implements RESTResponse {
   public abstract static class Builder<B extends Builder<B, R>, R extends BaseScanTaskResponse> {
     private List<String> planTasks;
     private List<FileScanTask> fileScanTasks;
-    private List<DeleteFile> deleteFiles;
+    private DeleteFileSet deleteFiles;
     private Map<Integer, PartitionSpec> specsById;
 
     protected Builder() {}
@@ -83,11 +86,21 @@ public abstract class BaseScanTaskResponse implements RESTResponse {
 
     public B withFileScanTasks(List<FileScanTask> tasks) {
       this.fileScanTasks = tasks;
+      if (fileScanTasks != null) {
+        this.deleteFiles =
+            DeleteFileSet.of(
+                () -> tasks.stream().flatMap(task -> task.deletes().stream()).iterator());
+      }
       return self();
     }
 
+    /**
+     * @deprecated since 1.11.0, will be removed in 1.12.0.
+     */
+    @Deprecated
     public B withDeleteFiles(List<DeleteFile> deleteFilesList) {
-      this.deleteFiles = deleteFilesList;
+      Preconditions.checkArgument(deleteFiles == null, "Cannot set delete files more than once");
+      this.deleteFiles = DeleteFileSet.of(deleteFilesList);
       return self();
     }
 
@@ -108,8 +121,13 @@ public abstract class BaseScanTaskResponse implements RESTResponse {
       return fileScanTasks;
     }
 
+
+	  /**
+	   * @deprecated since 1.11.0, visibility will be reduced in 1.12.0.
+	   */
+		@Deprecated
     public List<DeleteFile> deleteFiles() {
-      return deleteFiles;
+      return deleteFiles == null ? null : Lists.newArrayList(deleteFiles.iterator());
     }
 
     /**
