@@ -123,8 +123,8 @@ project(":iceberg-spark:iceberg-spark-${sparkMajorVersion}_${scalaVersion}") {
     testImplementation libs.sqlite.jdbc
     testImplementation libs.awaitility
     testImplementation(testFixtures(project(':iceberg-parquet')))
-    // runtime dependencies for running REST Catalog based integration test
-    testRuntimeOnly libs.jetty.servlet
+    // compile + runtime dependencies for REST Catalog based integration tests
+    testImplementation libs.jetty.servlet
   }
 
   test {

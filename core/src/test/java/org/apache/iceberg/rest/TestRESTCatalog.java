@@ -61,6 +61,7 @@ import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DataFiles;
 import org.apache.iceberg.HasTableOperations;
+import org.apache.iceberg.ManifestFile;
 import org.apache.iceberg.MetadataUpdate;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
@@ -85,6 +86,7 @@ import org.apache.iceberg.exceptions.RESTException;
 import org.apache.iceberg.exceptions.ServiceFailureException;
 import org.apache.iceberg.expressions.Expressions;
 import org.apache.iceberg.inmemory.InMemoryCatalog;
+import org.apache.iceberg.inmemory.InMemoryFileIO;
 import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.metrics.CommitReport;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
@@ -2557,6 +2559,58 @@ public class TestRESTCatalog extends CatalogTests<RESTCatalog> {
               String manifestListLocation = addSnapshot.snapshot().manifestListLocation();
               assertThat(table.io().newInputFile(manifestListLocation).exists()).isTrue();
             });
+  }
+
+  @Test
+  public void testNoCleanupAfterCommitFailedRetrySuccess() {
+    AtomicBoolean firstAttempt = new AtomicBoolean(true);
+    RESTCatalogAdapter adapter = Mockito.spy(new RESTCatalogAdapter(backendCatalog));
+
+    // Simulate 409 on the first commit attempt; the retry succeeds via callRealMethod
+    Mockito.doAnswer(
+            inv -> {
+              if (firstAttempt.getAndSet(false)) {
+                throw new CommitFailedException("Simulated conflict: metadata has changed");
+              }
+              return inv.callRealMethod();
+            })
+        .when(adapter)
+        .execute(matches(HTTPMethod.POST, RESOURCE_PATHS.table(TABLE)), any(), any(), any());
+
+    RESTCatalog catalog = catalog(adapter);
+
+    if (requiresNamespaceCreate()) {
+      catalog.createNamespace(TABLE.namespace());
+    }
+
+    catalog.createTable(TABLE, SCHEMA);
+
+    // Pre-register the data file in the in-memory IO to simulate it being written to storage
+    Table table = catalog.loadTable(TABLE);
+    InMemoryFileIO fileIO = (InMemoryFileIO) table.io();
+    fileIO.addFile(FILE_A.path().toString(), new byte[0]);
+
+    // Commit should succeed after one retry despite the initial 409
+    table.newFastAppend().appendFile(FILE_A).commit();
+
+    // Verify the commit succeeded
+    Table updated = catalog.loadTable(TABLE);
+    Snapshot snapshot = updated.currentSnapshot();
+    assertThat(snapshot).isNotNull();
+
+    // Verify the manifest list is not cleaned up
+    assertThat(updated.io().newInputFile(snapshot.manifestListLocation()).exists()).isTrue();
+
+    // Verify each manifest file is not cleaned up
+    List<ManifestFile> manifests = snapshot.allManifests(updated.io());
+    for (ManifestFile manifest : manifests) {
+      assertThat(updated.io().newInputFile(manifest.path()).exists()).isTrue();
+    }
+
+    // Verify FILE_A's data file itself is not cleaned up
+    List<DataFile> addedFiles = Lists.newArrayList(snapshot.addedDataFiles(updated.io()));
+    assertThat(addedFiles).hasSize(1);
+    assertThat(updated.io().newInputFile(addedFiles.get(0).path().toString()).exists()).isTrue();
   }
 
   @Test
