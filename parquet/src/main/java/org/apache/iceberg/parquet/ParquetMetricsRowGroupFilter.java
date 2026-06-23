@@ -36,11 +36,13 @@ import org.apache.iceberg.expressions.ExpressionVisitors.BoundExpressionVisitor;
 import org.apache.iceberg.expressions.Expressions;
 import org.apache.iceberg.expressions.Literal;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
+import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.types.Comparators;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.iceberg.util.BinaryUtil;
+import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ColumnChunkMetaData;
@@ -82,10 +84,23 @@ public class ParquetMetricsRowGroupFilter {
     private Map<Integer, Statistics<?>> stats = null;
     private Map<Integer, Long> valueCounts = null;
     private Map<Integer, Function<Object, Object>> conversions = null;
+    private Set<Integer> fileFieldIds = null;
 
     private boolean eval(MessageType fileSchema, BlockMetaData rowGroup) {
       if (rowGroup.getRowCount() <= 0) {
         return ROWS_CANNOT_MATCH;
+      }
+
+      // The Parquet file schema is the source of truth for which columns are present in the file.
+      // A column may be present but lack statistics, so the stats maps below cannot be used to
+      // decide presence. Only leaf primitives are consulted by the predicate handlers (nested and
+      // variant terms short-circuit before any presence check), so collecting leaf ids is enough.
+      this.fileFieldIds = Sets.newHashSet();
+      for (ColumnDescriptor desc : fileSchema.getColumns()) {
+        PrimitiveType primitive = desc.getPrimitiveType();
+        if (primitive.getId() != null) {
+          fileFieldIds.add(primitive.getId().intValue());
+        }
       }
 
       this.stats = Maps.newHashMap();
@@ -135,12 +150,13 @@ public class ParquetMetricsRowGroupFilter {
     public <T> Boolean predicate(BoundPredicate<T> pred) {
       // A column that is absent from this file but carries an initial-default reads as the default
       // for every row, not as null. The per-predicate handlers below assume an absent column is all
-      // nulls (valueCount == null), which would skip the row group and drop the backfilled rows
-      // (e.g. for col = <default> or the IsNotNull engines infer). Evaluate such predicates against
-      // the default value instead. See #16690.
+      // nulls, which would skip the row group and drop the backfilled rows. Presence is determined
+      // from the Parquet file schema, not the stats maps, because a column may be present yet lack
+      // stats. When a column is truly absent and has an initial-default, evaluate the predicate
+      // against that default value instead. See #16690.
       if (pred.term() instanceof BoundReference) {
         int id = ((BoundReference<T>) pred.term()).fieldId();
-        if (!valueCounts.containsKey(id)) {
+        if (!fileFieldIds.contains(id)) {
           Types.NestedField field = schema.findField(id);
           if (field != null && field.initialDefault() != null) {
             return pred.test((T) field.initialDefault()) ? ROWS_MIGHT_MATCH : ROWS_CANNOT_MATCH;

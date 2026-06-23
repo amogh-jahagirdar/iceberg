@@ -510,6 +510,41 @@ public class TestMetricsRowGroupFilter {
     }
   }
 
+  @TestTemplate
+  public void testColumnInFileWithInitialDefaultIsNotFolded() {
+    // A column that is physically present in the file must be filtered on its real values, even if
+    // the table schema gives it an initial-default. Presence is determined from the Parquet file
+    // schema, not the stats maps -- a present column may simply lack stats. Here no_stats_parquet
+    // (field id 2) is in the file but has no min/max stats (its value is too long for Parquet
+    // stats), so every predicate must fall through to the stats logic and keep the row group rather
+    // than be folded against the default. See #16690.
+    assumeThat(format).isEqualTo(FileFormat.PARQUET);
+
+    Schema schemaWithDefault =
+        new Schema(
+            required(1, "id", IntegerType.get()),
+            Types.NestedField.optional("no_stats_parquet")
+                .withId(2)
+                .ofType(StringType.get())
+                .withInitialDefault(Literal.of("US"))
+                .build());
+
+    // these predicates are all false for the default 'US'; folding would skip the row group, but
+    // the column is present without stats, so the file must still be read
+    Expression[] mustReadBecausePresent =
+        new Expression[] {
+          equal("no_stats_parquet", "CA"),
+          isNull("no_stats_parquet"),
+          notEqual("no_stats_parquet", "US"),
+          lessThan("no_stats_parquet", "A")
+        };
+    for (Expression expr : mustReadBecausePresent) {
+      assertThat(shouldReadWithSchema(schemaWithDefault, expr))
+          .as("Should read: present column must use stats, not the default: " + expr)
+          .isTrue();
+    }
+  }
+
   private boolean shouldReadWithSchema(Schema schema, Expression expr) {
     return new ParquetMetricsRowGroupFilter(schema, expr)
         .shouldRead(parquetSchema, rowGroupMetadata);
