@@ -689,6 +689,41 @@ public class TestFilterPushDown extends TestBaseWithCatalog {
     assertThat(sql("SELECT * FROM %s WHERE c IS NULL", tableName)).isEmpty();
   }
 
+  @TestTemplate
+  public void testFilterPushdownOnNestedInitialDefaultColumnAbsentFromFile() {
+    sql(
+        "CREATE TABLE %s (id BIGINT, loc STRUCT<city: STRING>) USING iceberg "
+            + "TBLPROPERTIES ('format-version' = '3')",
+        tableName);
+    configurePlanningMode(planningMode);
+
+    sql(
+        "INSERT INTO %s VALUES (1, named_struct('city', 'San Francisco')), (2, NULL)",
+        tableName);
+
+    Table table = validationCatalog.loadTable(tableIdent);
+    table
+        .updateSchema()
+        .addColumn("loc", "country", Types.StringType.get(), Expressions.lit("US"))
+        .commit();
+    sql("REFRESH TABLE %s", tableName);
+
+    sql(
+        "INSERT INTO %s VALUES (3, named_struct('city', 'Toronto', 'country', 'CA'))",
+        tableName);
+
+    assertThat(sql("SELECT id FROM %s WHERE loc.country = 'US'", tableName))
+        .containsExactly(row(1L));
+
+    // row 2's ancestor struct loc is itself null, so loc.country must read as null, not
+    // as the default 'US'
+    assertThat(sql("SELECT id FROM %s WHERE loc.country IS NULL", tableName))
+        .containsExactly(row(2L));
+
+    assertThat(sql("SELECT id FROM %s WHERE loc.country = 'CA'", tableName))
+        .containsExactly(row(3L));
+  }
+
   private void checkOnlyIcebergFilters(
       String predicate, String icebergFilters, List<Object[]> expectedRows) {
 
