@@ -35,4 +35,8 @@ public class SparkTableProperties {
 
   public static final String WRITE_ADVISORY_PARTITION_SIZE_BYTES =
       "write.spark.advisory-partition-size-bytes";
+
+  public static final String WRITE_STREAMING_MERGE_MANIFESTS_ENABLED =
+      "write.spark.streaming.merge-manifests.enabled";
+  public static final boolean WRITE_STREAMING_MERGE_MANIFESTS_ENABLED_DEFAULT = false;
 }

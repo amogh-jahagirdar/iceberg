@@ -244,6 +244,15 @@ public class SparkWriteConf {
         .parse();
   }
 
+  public boolean streamingMergeManifestsEnabled() {
+    return confParser
+        .booleanConf()
+        .option(SparkWriteOptions.STREAMING_MERGE_MANIFESTS_ENABLED)
+        .tableProperty(SparkTableProperties.WRITE_STREAMING_MERGE_MANIFESTS_ENABLED)
+        .defaultValue(SparkTableProperties.WRITE_STREAMING_MERGE_MANIFESTS_ENABLED_DEFAULT)
+        .parse();
+  }
+
   public FileFormat deleteFileFormat() {
     if (!(table instanceof BaseMetadataTable) && TableUtil.formatVersion(table) >= 3) {
       return FileFormat.PUFFIN;

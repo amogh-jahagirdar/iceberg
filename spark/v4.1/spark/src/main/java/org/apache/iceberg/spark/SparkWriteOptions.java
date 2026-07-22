@@ -92,4 +92,9 @@ public class SparkWriteOptions {
 
   // Controls the buffer size for variant schema inference during writes
   public static final String VARIANT_INFERENCE_BUFFER_SIZE = "variant-inference-buffer-size";
+
+  // Controls whether Structured Streaming micro-batch commits merge and filter manifests like a
+  // regular append, instead of using a fast append that never rewrites existing manifests
+  // (default: false)
+  public static final String STREAMING_MERGE_MANIFESTS_ENABLED = "streaming-merge-manifests-enabled";
 }
