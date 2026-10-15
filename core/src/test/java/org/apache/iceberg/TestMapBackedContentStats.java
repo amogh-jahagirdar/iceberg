@@ -50,6 +50,9 @@ class TestMapBackedContentStats {
           Types.NestedField.optional(4, "name", Types.StringType.get()),
           Types.NestedField.optional(5, "flag", Types.BooleanType.get()));
 
+  private static final Map<Integer, PartitionSpec> UNPARTITIONED =
+      ImmutableMap.of(PartitionSpec.unpartitioned().specId(), PartitionSpec.unpartitioned());
+
   private static final PartitionData EMPTY_PARTITION =
       new PartitionData(PartitionSpec.unpartitioned().partitionType());
 
@@ -76,7 +79,7 @@ class TestMapBackedContentStats {
 
   @Test
   void typeMatchesIdsPresentInMaps() {
-    MapBackedContentStats stats = new MapBackedContentStats(SCHEMA);
+    MapBackedContentStats stats = new MapBackedContentStats(SCHEMA, UNPARTITIONED);
 
     assertThat(stats.type().fields()).isEmpty();
 
@@ -100,7 +103,8 @@ class TestMapBackedContentStats {
             ImmutableMap.of(),
             bound(fieldId, Conversions.toByteBuffer(type, lower)),
             bound(fieldId, Conversions.toByteBuffer(type, upper)));
-    FieldStats<?> stats = new MapBackedContentStats(schema).wrap(file).statsFor(fieldId);
+    FieldStats<?> stats =
+        new MapBackedContentStats(schema, UNPARTITIONED).wrap(file).statsFor(fieldId);
 
     Comparator<Object> comparator = Comparators.forType(type.asPrimitiveType());
     assertThat(stats.lowerBound()).usingComparator(comparator).isEqualTo(lower);
@@ -148,7 +152,7 @@ class TestMapBackedContentStats {
             ImmutableMap.of(),
             ImmutableMap.of(10, lower.toByteBuffer()),
             ImmutableMap.of(10, upper.toByteBuffer()));
-    MapBackedContentStats stats = new MapBackedContentStats(schema).wrap(file);
+    MapBackedContentStats stats = new MapBackedContentStats(schema, UNPARTITIONED).wrap(file);
 
     FieldStats<?> geom = stats.statsFor(10);
     assertThat(geom.lowerBound()).isInstanceOf(GeospatialBound.class).isEqualTo(lower);
@@ -165,7 +169,7 @@ class TestMapBackedContentStats {
             ImmutableMap.of(),
             ImmutableMap.of(),
             ImmutableMap.of());
-    MapBackedContentStats stats = new MapBackedContentStats(SCHEMA).wrap(file);
+    MapBackedContentStats stats = new MapBackedContentStats(SCHEMA, UNPARTITIONED).wrap(file);
 
     FieldStats<?> id = stats.statsFor(1);
     assertThat(id.lowerBound()).isNull();
@@ -175,7 +179,8 @@ class TestMapBackedContentStats {
 
   @Test
   void countsAndTightBounds() {
-    MapBackedContentStats stats = new MapBackedContentStats(SCHEMA).wrap(FILE_WITH_STATS);
+    MapBackedContentStats stats =
+        new MapBackedContentStats(SCHEMA, UNPARTITIONED).wrap(FILE_WITH_STATS);
 
     FieldStats<?> id = stats.statsFor(1);
     assertThat(id.hasValueCount()).isTrue();
@@ -220,7 +225,8 @@ class TestMapBackedContentStats {
 
   @Test
   void fieldWithoutStatsIsExcluded() {
-    MapBackedContentStats stats = new MapBackedContentStats(SCHEMA).wrap(FILE_WITH_STATS);
+    MapBackedContentStats stats =
+        new MapBackedContentStats(SCHEMA, UNPARTITIONED).wrap(FILE_WITH_STATS);
     assertThat(stats.type().field(StatsUtil.toBaseId(5))).isNull();
     assertThat(stats.statsFor(5)).isNull();
   }
@@ -235,7 +241,7 @@ class TestMapBackedContentStats {
             ImmutableMap.of(),
             ImmutableMap.of(),
             ImmutableMap.of());
-    MapBackedContentStats stats = new MapBackedContentStats(SCHEMA).wrap(file);
+    MapBackedContentStats stats = new MapBackedContentStats(SCHEMA, UNPARTITIONED).wrap(file);
 
     assertThat(stats.statsFor(99)).isNull();
     assertThat(stats.type().fields()).isEmpty();
@@ -244,7 +250,8 @@ class TestMapBackedContentStats {
 
   @Test
   void wrapInvalidatesType() {
-    MapBackedContentStats stats = new MapBackedContentStats(SCHEMA).wrap(FILE_WITH_STATS);
+    MapBackedContentStats stats =
+        new MapBackedContentStats(SCHEMA, UNPARTITIONED).wrap(FILE_WITH_STATS);
     Types.StructType firstType = stats.type();
     assertThat(firstType.fields())
         .containsExactlyInAnyOrderElementsOf(
@@ -268,7 +275,7 @@ class TestMapBackedContentStats {
 
   @Test
   void reuseRebindsFields() {
-    MapBackedContentStats stats = new MapBackedContentStats(SCHEMA);
+    MapBackedContentStats stats = new MapBackedContentStats(SCHEMA, UNPARTITIONED);
 
     stats.wrap(FILE_WITH_STATS);
     assertThat(stats.statsFor(1).lowerBound()).isEqualTo(1);
@@ -314,7 +321,7 @@ class TestMapBackedContentStats {
             ImmutableMap.of(),
             ImmutableMap.of(2, buf(Types.IntegerType.get(), 1)),
             ImmutableMap.of(2, buf(Types.IntegerType.get(), 9)));
-    MapBackedContentStats stats = new MapBackedContentStats(schema).wrap(file);
+    MapBackedContentStats stats = new MapBackedContentStats(schema, UNPARTITIONED).wrap(file);
 
     FieldStats<?> element = stats.statsFor(2);
     assertThat(element.lowerBound()).isEqualTo(1);

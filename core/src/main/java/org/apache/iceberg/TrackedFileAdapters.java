@@ -60,8 +60,8 @@ class TrackedFileAdapters {
   }
 
   /** Returns a reusable adapter from {@link DataFile} to {@link TrackedFile}. */
-  static DataTrackedFile forDataFile(Schema tableSchema) {
-    return new DataTrackedFile(tableSchema);
+  static DataTrackedFile forDataFile(Schema tableSchema, Map<Integer, PartitionSpec> specsById) {
+    return new DataTrackedFile(tableSchema, specsById);
   }
 
   /** Returns a reusable adapter from {@link ManifestFile} to {@link TrackedFile}. */
@@ -530,8 +530,8 @@ class TrackedFileAdapters {
     private DataFile file;
     private ContentStats stats;
 
-    DataTrackedFile(Schema tableSchema) {
-      this.statsWrapper = new MapBackedContentStats(tableSchema);
+    DataTrackedFile(Schema tableSchema, Map<Integer, PartitionSpec> specsById) {
+      this.statsWrapper = new MapBackedContentStats(tableSchema, specsById);
     }
 
     /**

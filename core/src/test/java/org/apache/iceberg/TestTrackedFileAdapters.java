@@ -642,7 +642,8 @@ class TestTrackedFileAdapters {
 
   @Test
   void dataTrackedFileAdapterFromDataFile() {
-    TrackedFile result = TrackedFileAdapters.forDataFile(TABLE_SCHEMA).wrap(DATA_FILE);
+    TrackedFile result =
+        TrackedFileAdapters.forDataFile(TABLE_SCHEMA, UNPARTITIONED).wrap(DATA_FILE);
 
     assertThat(result.tracking()).isNull();
     assertWrappedDataFileMatchesFileFields(result, DATA_FILE);
@@ -651,7 +652,7 @@ class TestTrackedFileAdapters {
   @Test
   void dataTrackedFileAdapterFromExistingManifestEntry() {
     TrackedFile result =
-        TrackedFileAdapters.forDataFile(TABLE_SCHEMA)
+        TrackedFileAdapters.forDataFile(TABLE_SCHEMA, UNPARTITIONED)
             .wrap(
                 newEntry()
                     .wrapExisting(
@@ -668,7 +669,8 @@ class TestTrackedFileAdapters {
 
   @Test
   void dataTrackedFileAdapterReuse() {
-    TrackedFileAdapters.DataTrackedFile adapter = TrackedFileAdapters.forDataFile(TABLE_SCHEMA);
+    TrackedFileAdapters.DataTrackedFile adapter =
+        TrackedFileAdapters.forDataFile(TABLE_SCHEMA, UNPARTITIONED);
 
     adapter.wrap(DATA_FILE);
     assertWrappedDataFileMatchesFileFields(adapter, DATA_FILE);
@@ -696,7 +698,8 @@ class TestTrackedFileAdapters {
 
   @Test
   void dataTrackedFileAdapterRejectsNullFile() {
-    TrackedFileAdapters.DataTrackedFile adapter = TrackedFileAdapters.forDataFile(TABLE_SCHEMA);
+    TrackedFileAdapters.DataTrackedFile adapter =
+        TrackedFileAdapters.forDataFile(TABLE_SCHEMA, UNPARTITIONED);
     assertThatThrownBy(() -> adapter.wrap((DataFile) null))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Invalid file: null");
@@ -704,7 +707,8 @@ class TestTrackedFileAdapters {
 
   @Test
   void dataTrackedFileAdapterContentStats() {
-    TrackedFile result = TrackedFileAdapters.forDataFile(TABLE_SCHEMA).wrap(DATA_FILE_WITH_METRICS);
+    TrackedFile result =
+        TrackedFileAdapters.forDataFile(TABLE_SCHEMA, UNPARTITIONED).wrap(DATA_FILE_WITH_METRICS);
 
     ContentStats stats = result.contentStats();
     assertThat(stats).isNotNull();
@@ -718,7 +722,8 @@ class TestTrackedFileAdapters {
 
   @Test
   void dataTrackedFileAdapterWithoutMetricsHasNoContentStats() {
-    TrackedFile result = TrackedFileAdapters.forDataFile(TABLE_SCHEMA).wrap(DATA_FILE);
+    TrackedFile result =
+        TrackedFileAdapters.forDataFile(TABLE_SCHEMA, UNPARTITIONED).wrap(DATA_FILE);
 
     assertThat(result.contentStats()).isNull();
   }
@@ -737,7 +742,10 @@ class TestTrackedFileAdapters {
             ImmutableList.of(0L),
             null,
             null);
-    TrackedFile result = TrackedFileAdapters.forDataFile(TABLE_SCHEMA).wrap(partitioned);
+    TrackedFile result =
+        TrackedFileAdapters.forDataFile(
+                PARTITION_SCHEMA, ImmutableMap.of(PARTITIONED_SPEC_ID, PARTITIONED_SPEC))
+            .wrap(partitioned);
 
     assertThat(result.partition())
         .usingComparator(Comparators.forType(PARTITIONED_SPEC.partitionType()))
@@ -748,7 +756,8 @@ class TestTrackedFileAdapters {
   void dataTrackedFileAdapterUnwrapsToOriginalTrackedFile() {
     TrackedFile original = trackedFile(FileContent.DATA);
     DataFile adapted = TrackedFileAdapters.asDataFile(original, UNPARTITIONED);
-    TrackedFile roundTripped = TrackedFileAdapters.forDataFile(TABLE_SCHEMA).wrap(adapted);
+    TrackedFile roundTripped =
+        TrackedFileAdapters.forDataFile(TABLE_SCHEMA, UNPARTITIONED).wrap(adapted);
     assertThat(roundTripped).isSameAs(original);
   }
 
