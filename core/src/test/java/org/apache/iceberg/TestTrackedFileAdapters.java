@@ -753,6 +753,65 @@ class TestTrackedFileAdapters {
   }
 
   @Test
+  void dataTrackedFileAdapterContentStatsFromPartitionWithoutMetrics() {
+    TrackedFile result = partitionedAdapter().wrap(partitionedFile(PARTITIONED_SPEC_ID, PARTITION));
+
+    ContentStats stats = result.contentStats();
+    assertThat(stats).isNotNull();
+    assertThat(stats.fieldStats()).extracting(FieldStats::fieldId).containsExactly(1);
+
+    FieldStats<?> categoryStats = stats.statsFor(1);
+    assertThat(categoryStats.lowerBound()).isEqualTo("books");
+    assertThat(categoryStats.upperBound()).isEqualTo("books");
+    assertThat(categoryStats.valueCount()).isEqualTo(100L);
+    assertThat(categoryStats.nullValueCount()).isZero();
+  }
+
+  @Test
+  void dataTrackedFileAdapterRejectsFileWithUnknownSpec() {
+    TrackedFileAdapters.DataTrackedFile adapter = partitionedAdapter();
+    DataFile file = partitionedFile(PARTITIONED_SPEC_ID + 1, PARTITION);
+
+    assertThatThrownBy(() -> adapter.wrap(file))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Cannot find partition spec for spec ID");
+  }
+
+  @Test
+  void dataTrackedFileAdapterRejectsBucketPartitionedFile() {
+    PartitionSpec bucketed =
+        PartitionSpec.builderFor(PARTITION_SCHEMA).bucket("category", 16).withSpecId(2).build();
+    PartitionData bucket = new PartitionData(bucketed.partitionType());
+    bucket.set(0, 3);
+    TrackedFileAdapters.DataTrackedFile adapter =
+        TrackedFileAdapters.forDataFile(PARTITION_SCHEMA, ImmutableMap.of(2, bucketed));
+    DataFile file = partitionedFile(2, bucket);
+
+    assertThatThrownBy(() -> adapter.wrap(file))
+        .isInstanceOf(UnsupportedOperationException.class)
+        .hasMessageContaining("bucket");
+  }
+
+  private static TrackedFileAdapters.DataTrackedFile partitionedAdapter() {
+    return TrackedFileAdapters.forDataFile(
+        PARTITION_SCHEMA, ImmutableMap.of(PARTITIONED_SPEC_ID, PARTITIONED_SPEC));
+  }
+
+  private static DataFile partitionedFile(int specId, PartitionData partition) {
+    return new GenericDataFile(
+        specId,
+        DATA_FILE_LOCATION,
+        FileFormat.PARQUET,
+        partition,
+        1024L,
+        new Metrics(100L, null, null, null, null),
+        null,
+        ImmutableList.of(0L),
+        null,
+        null);
+  }
+
+  @Test
   void dataTrackedFileAdapterUnwrapsToOriginalTrackedFile() {
     TrackedFile original = trackedFile(FileContent.DATA);
     DataFile adapted = TrackedFileAdapters.asDataFile(original, UNPARTITIONED);

@@ -574,7 +574,9 @@ class TrackedFileAdapters {
           newFile.content());
 
       this.file = newFile;
-      this.stats = hasContentStats(newFile) ? statsWrapper.wrap(newFile) : null;
+      statsWrapper.wrap(newFile);
+      this.stats =
+          hasContentStats(newFile) || statsWrapper.hasPartitionStats() ? statsWrapper : null;
     }
 
     @Override
