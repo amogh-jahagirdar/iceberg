@@ -44,6 +44,7 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.util.JsonUtil;
+import org.apache.iceberg.util.LocationUtil;
 
 public class TableMetadataParser {
 
@@ -243,9 +244,10 @@ public class TableMetadataParser {
 
     toJson(metadata.refs(), generator);
 
+    String relativePathBase = relativePathBase(metadata.formatVersion(), metadata.location());
     generator.writeArrayFieldStart(SNAPSHOTS);
     for (Snapshot snapshot : metadata.snapshots()) {
-      SnapshotParser.toJson(snapshot, generator);
+      SnapshotParser.toJson(snapshot, generator, relativePathBase);
     }
     generator.writeEndArray();
 
@@ -274,12 +276,20 @@ public class TableMetadataParser {
     for (MetadataLogEntry logEntry : metadata.previousFiles()) {
       generator.writeStartObject();
       generator.writeNumberField(TIMESTAMP_MS, logEntry.timestampMillis());
-      generator.writeStringField(METADATA_FILE, logEntry.file());
+      generator.writeStringField(
+          METADATA_FILE,
+          relativePathBase != null
+              ? LocationUtil.relativizeLocation(relativePathBase, logEntry.file())
+              : logEntry.file());
       generator.writeEndObject();
     }
     generator.writeEndArray();
 
     generator.writeEndObject();
+  }
+
+  private static String relativePathBase(int formatVersion, String location) {
+    return formatVersion >= TableMetadata.MIN_FORMAT_VERSION_RELATIVE_PATHS ? location : null;
   }
 
   private static void toJson(Map<String, SnapshotRef> refs, JsonGenerator generator)
@@ -507,6 +517,7 @@ public class TableMetadataParser {
       refs = ImmutableMap.of();
     }
 
+    String relativePathBase = relativePathBase(formatVersion, location);
     List<Snapshot> snapshots;
     if (node.has(SNAPSHOTS)) {
       JsonNode snapshotArray = JsonUtil.get(SNAPSHOTS, node);
@@ -516,7 +527,7 @@ public class TableMetadataParser {
       snapshots = Lists.newArrayListWithExpectedSize(snapshotArray.size());
       Iterator<JsonNode> iterator = snapshotArray.elements();
       while (iterator.hasNext()) {
-        snapshots.add(SnapshotParser.fromJson(iterator.next()));
+        snapshots.add(SnapshotParser.fromJson(iterator.next(), relativePathBase));
       }
     } else {
       snapshots = ImmutableList.of();
@@ -553,10 +564,13 @@ public class TableMetadataParser {
       Iterator<JsonNode> logIterator = node.get(METADATA_LOG).elements();
       while (logIterator.hasNext()) {
         JsonNode entryNode = logIterator.next();
+        String metadataFile = JsonUtil.getString(METADATA_FILE, entryNode);
         metadataEntries.add(
             new MetadataLogEntry(
                 JsonUtil.getLong(TIMESTAMP_MS, entryNode),
-                JsonUtil.getString(METADATA_FILE, entryNode)));
+                relativePathBase != null
+                    ? LocationUtil.resolveLocation(relativePathBase, metadataFile)
+                    : metadataFile));
       }
     }
 

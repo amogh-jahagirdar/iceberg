@@ -31,6 +31,7 @@ import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Iterables;
 import org.apache.iceberg.util.JsonUtil;
+import org.apache.iceberg.util.LocationUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,6 +57,11 @@ public class SnapshotParser {
   private static final String KEY_ID = "key-id";
 
   static void toJson(Snapshot snapshot, JsonGenerator generator) throws IOException {
+    toJson(snapshot, generator, null);
+  }
+
+  static void toJson(Snapshot snapshot, JsonGenerator generator, String tableLocation)
+      throws IOException {
     generator.writeStartObject();
     if (snapshot.sequenceNumber() > TableMetadata.INITIAL_SEQUENCE_NUMBER) {
       generator.writeNumberField(SEQUENCE_NUMBER, snapshot.sequenceNumber());
@@ -85,7 +91,11 @@ public class SnapshotParser {
     String manifestList = snapshot.manifestListLocation();
     if (manifestList != null) {
       // write just the location. manifests should not be embedded in JSON along with a list
-      generator.writeStringField(MANIFEST_LIST, manifestList);
+      generator.writeStringField(
+          MANIFEST_LIST,
+          tableLocation != null
+              ? LocationUtil.relativizeLocation(tableLocation, manifestList)
+              : manifestList);
     } else {
       // embed the manifest list in the JSON, v1 only
       JsonUtil.writeStringArray(
@@ -122,6 +132,10 @@ public class SnapshotParser {
   }
 
   static Snapshot fromJson(JsonNode node) {
+    return fromJson(node, null);
+  }
+
+  static Snapshot fromJson(JsonNode node, String tableLocation) {
     Preconditions.checkArgument(
         node.isObject(), "Cannot parse table version from a non-object: %s", node);
 
@@ -187,10 +201,13 @@ public class SnapshotParser {
           operation,
           summary,
           schemaId,
-          manifestList,
+          tableLocation != null
+              ? LocationUtil.resolveLocation(tableLocation, manifestList)
+              : manifestList,
           firstRowId,
           addedRows,
-          keyId);
+          keyId,
+          tableLocation);
 
     } else {
       // fall back to an embedded manifest list. pass in the manifest's InputFile so length can be

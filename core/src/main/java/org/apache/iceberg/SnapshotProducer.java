@@ -66,7 +66,9 @@ import org.apache.iceberg.metrics.MetricsReporter;
 import org.apache.iceberg.metrics.Timer.Timed;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.relocated.com.google.common.collect.Iterables;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.relocated.com.google.common.math.IntMath;
@@ -305,6 +307,10 @@ abstract class SnapshotProducer<ThisT> implements SnapshotUpdate<ThisT> {
 
     List<ManifestFile> manifests = apply(base, parentSnapshot);
 
+    if (base.formatVersion() >= TableMetadata.MIN_FORMAT_VERSION_PARQUET_MANIFESTS) {
+      return applyRootManifest(manifests, parentSnapshot, sequenceNumber);
+    }
+
     OutputFile manifestList = manifestListPath();
 
     ManifestListWriter writer =
@@ -321,15 +327,7 @@ abstract class SnapshotProducer<ThisT> implements SnapshotUpdate<ThisT> {
       // keep track of the manifest lists created
       manifestLists.add(manifestList.location());
 
-      ManifestFile[] manifestFiles = new ManifestFile[manifests.size()];
-
-      Tasks.range(manifestFiles.length)
-          .stopOnFailure()
-          .throwFailureWhenFinished()
-          .executeWith(workerPool())
-          .run(index -> manifestFiles[index] = manifestsWithMetadata.get(manifests.get(index)));
-
-      writer.addAll(Arrays.asList(manifestFiles));
+      writer.addAll(Arrays.asList(withMetadata(manifests)));
     } catch (IOException e) {
       throw new RuntimeIOException(e, "Failed to write manifest list file");
     }
@@ -341,6 +339,94 @@ abstract class SnapshotProducer<ThisT> implements SnapshotUpdate<ThisT> {
       assignedRows = writer.nextRowId() - base.nextRowId();
     }
 
+    validateReplace();
+
+    this.manifestListEncryptionKeys = writer.encryptionKeys();
+
+    return new BaseSnapshot(
+        sequenceNumber,
+        snapshotId(),
+        parentSnapshotId,
+        snapshotTimestampMillis(parentSnapshot),
+        operation(),
+        summary(base),
+        base.currentSchemaId(),
+        manifestList.location(),
+        nextRowId,
+        assignedRows,
+        manifestListEncryptionKeys != null ? manifestListEncryptionKeys.fileKey().keyId() : null);
+  }
+
+  private Snapshot applyRootManifest(
+      List<ManifestFile> manifests, Snapshot parentSnapshot, long sequenceNumber) {
+    OutputFile rootManifest = rootManifestPath();
+    MetricsConfig metricsConfig =
+        MetricsConfig.from(base.properties(), base.schema(), base.sortOrder());
+
+    RootManifestWriter writer =
+        new RootManifestWriter(rootManifest, base, metricsConfig, snapshotId(), sequenceNumber);
+    try (writer) {
+      manifestLists.add(rootManifest.location());
+
+      for (ManifestFile manifest : withMetadata(manifests)) {
+        writer.add(manifest);
+      }
+
+      for (TrackedFile dataFile : rootDataFiles(parentSnapshot, metricsConfig)) {
+        writer.addExisting(dataFile);
+      }
+    } catch (IOException e) {
+      throw new RuntimeIOException(e, "Failed to write root manifest file");
+    }
+
+    validateReplace();
+
+    return new BaseSnapshot(
+        sequenceNumber,
+        snapshotId(),
+        parentSnapshot == null ? null : parentSnapshot.snapshotId(),
+        snapshotTimestampMillis(parentSnapshot),
+        operation(),
+        summary(base),
+        base.currentSchemaId(),
+        rootManifest.location(),
+        base.nextRowId(),
+        writer.nextRowId() - base.nextRowId(),
+        null /* key ID */,
+        base.location());
+  }
+
+  private List<TrackedFile> rootDataFiles(Snapshot snapshot, MetricsConfig metricsConfig) {
+    if (snapshot == null || !V4Metadata.hasRootManifest(snapshot)) {
+      return ImmutableList.of();
+    }
+
+    ManifestFile rootManifest = V4Metadata.rootManifest(snapshot, ops.io());
+    try (V4ManifestReader reader =
+        V4ManifestReader.builder(rootManifest, ops.io(), base.schema(), base.specsById())
+            .tableLocation(base.location())
+            .metricsConfig(metricsConfig)
+            .build()) {
+      return Lists.newArrayList(
+          Iterables.filter(reader, file -> file.contentType() == FileContent.DATA));
+    } catch (IOException e) {
+      throw new RuntimeIOException(e, "Failed to read root manifest: %s", rootManifest.path());
+    }
+  }
+
+  private ManifestFile[] withMetadata(List<ManifestFile> manifests) {
+    ManifestFile[] manifestFiles = new ManifestFile[manifests.size()];
+
+    Tasks.range(manifestFiles.length)
+        .stopOnFailure()
+        .throwFailureWhenFinished()
+        .executeWith(workerPool())
+        .run(index -> manifestFiles[index] = manifestsWithMetadata.get(manifests.get(index)));
+
+    return manifestFiles;
+  }
+
+  private void validateReplace() {
     Map<String, String> summary = summary();
     String operation = operation();
 
@@ -357,21 +443,6 @@ abstract class SnapshotProducer<ThisT> implements SnapshotUpdate<ThisT> {
           addedRecords,
           replacedRecords);
     }
-
-    this.manifestListEncryptionKeys = writer.encryptionKeys();
-
-    return new BaseSnapshot(
-        sequenceNumber,
-        snapshotId(),
-        parentSnapshotId,
-        snapshotTimestampMillis(parentSnapshot),
-        operation(),
-        summary(base),
-        base.currentSchemaId(),
-        manifestList.location(),
-        nextRowId,
-        assignedRows,
-        manifestListEncryptionKeys != null ? manifestListEncryptionKeys.fileKey().keyId() : null);
   }
 
   private void runValidations(Snapshot parentSnapshot) {
@@ -629,6 +700,19 @@ abstract class SnapshotProducer<ThisT> implements SnapshotUpdate<ThisT> {
                     String.format(
                         Locale.ROOT,
                         "snap-%d-%d-%s",
+                        snapshotId(),
+                        attempt.incrementAndGet(),
+                        commitUUID))));
+  }
+
+  private OutputFile rootManifestPath() {
+    return ops.io()
+        .newOutputFile(
+            ops.metadataFileLocation(
+                FileFormat.PARQUET.addExtension(
+                    String.format(
+                        Locale.ROOT,
+                        "root-%d-%d-%s",
                         snapshotId(),
                         attempt.incrementAndGet(),
                         commitUUID))));

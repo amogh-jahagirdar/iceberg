@@ -20,6 +20,7 @@ package org.apache.iceberg;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -75,15 +76,23 @@ abstract class BaseFilesTable extends BaseMetadataTable {
                   return ManifestEvaluator.forRowFilter(rowFilter, transformedSpec, caseSensitive);
                 });
 
+    // v4 manifests can track files from more than one spec and have no partition summaries
     CloseableIterable<ManifestFile> filteredManifests =
         CloseableIterable.filter(
-            manifests, manifest -> evalCache.get(manifest.partitionSpecId()).eval(manifest));
+            manifests,
+            manifest ->
+                isV4Manifest(manifest)
+                    || evalCache.get(manifest.partitionSpecId()).eval(manifest));
 
     Expression filter = ignoreResiduals ? Expressions.alwaysTrue() : rowFilter;
 
     return CloseableIterable.transform(
         filteredManifests,
         manifest -> new ManifestReadTask(table, manifest, projectedSchema, filter));
+  }
+
+  private static boolean isV4Manifest(ManifestFile manifest) {
+    return manifest.formatVersion() >= V4Metadata.FORMAT_VERSION;
   }
 
   abstract static class BaseFilesTableScan extends BaseMetadataTableScan {
@@ -181,7 +190,37 @@ abstract class BaseFilesTable extends BaseMetadataTable {
     }
 
     private CloseableIterable<? extends ContentFile<?>> files(Schema fileProjection) {
+      if (isV4Manifest(manifest)) {
+        return v4Files(fileProjection);
+      }
+
       return ManifestFiles.open(manifest, io, specsById).project(fileProjection);
+    }
+
+    private CloseableIterable<DataFile> v4Files(Schema fileProjection) {
+      V4ManifestReader reader =
+          V4ManifestReader.builder(manifest, io, dataTableSchema, specsById)
+              .forScanPlanning()
+              .projectStats(TypeUtil.getProjectedIds(dataTableSchema))
+              .build();
+      return CloseableIterable.transform(reader, file -> projectedDataFile(file, fileProjection));
+    }
+
+    // rows must be structs in the order of the projection
+    private DataFile projectedDataFile(TrackedFile file, Schema fileProjection) {
+      DataFile dataFile = TrackedFileAdapters.asDataFile(file, specsById);
+      PartitionSpec spec = specsById.get(dataFile.specId());
+      StructLike fullFile = (StructLike) DataFiles.builder(spec).copy(dataFile).build();
+      StructType fullType = DataFile.getType(spec.partitionType());
+
+      GenericDataFile projected = new GenericDataFile(fileProjection.asStruct());
+      List<Types.NestedField> fields = fileProjection.columns();
+      for (int pos = 0; pos < fields.size(); pos += 1) {
+        Types.NestedField fullField = fullType.field(fields.get(pos).fieldId());
+        projected.set(pos, fullFile.get(fullType.fields().indexOf(fullField), Object.class));
+      }
+
+      return projected;
     }
 
     /**

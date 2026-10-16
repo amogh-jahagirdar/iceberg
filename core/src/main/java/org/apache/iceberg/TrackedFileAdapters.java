@@ -69,6 +69,11 @@ class TrackedFileAdapters {
     return new ManifestTrackedFile();
   }
 
+  /** Returns the tracked file of a manifest read from a root manifest, or null. */
+  static TrackedFile trackedFile(ManifestFile manifest) {
+    return manifest instanceof TrackedManifestFile trackedManifest ? trackedManifest.file : null;
+  }
+
   /** Shared base for data and delete file adapters. */
   private abstract static class TrackedFileAdapter<F extends ContentFile<F>>
       implements ContentFile<F>, Serializable {
@@ -385,7 +390,7 @@ class TrackedFileAdapters {
   }
 
   /** Adapts a TrackedFile to {@link ManifestFile}. */
-  private static class TrackedManifestFile implements ManifestFile {
+  private static class TrackedManifestFile implements ManifestFile, Serializable {
     private final TrackedFile file;
 
     private TrackedManifestFile(TrackedFile file) {

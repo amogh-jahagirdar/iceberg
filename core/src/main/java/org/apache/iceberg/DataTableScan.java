@@ -65,6 +65,10 @@ public class DataTableScan extends BaseTableScan {
     Snapshot snapshot = snapshot();
 
     FileIO io = table().io();
+    if (V4Metadata.hasRootManifest(snapshot)) {
+      return planRootManifest(snapshot, io);
+    }
+
     List<ManifestFile> dataManifests = snapshot.dataManifests(io);
     List<ManifestFile> deleteManifests = snapshot.deleteManifests(io);
     scanMetrics().totalDataManifests().increment((long) dataManifests.size());
@@ -89,5 +93,28 @@ public class DataTableScan extends BaseTableScan {
     }
 
     return manifestGroup.planFiles();
+  }
+
+  private CloseableIterable<FileScanTask> planRootManifest(Snapshot snapshot, FileIO io) {
+    ManifestExpander expander =
+        new ManifestExpander(
+                io,
+                V4Metadata.rootManifest(snapshot, io),
+                tableSchema(),
+                specs(),
+                table().location())
+            .caseSensitive(isCaseSensitive())
+            .filterData(filter())
+            .scanMetrics(scanMetrics());
+
+    if (shouldIgnoreResiduals()) {
+      expander = expander.ignoreResiduals();
+    }
+
+    if (shouldPlanWithExecutor()) {
+      expander = expander.planWith(planExecutor());
+    }
+
+    return expander.planFiles();
   }
 }
