@@ -124,7 +124,8 @@ class TestV4ManifestReadWrite {
 
     String metadataDir = table.location() + "/metadata/";
     assertThat(metadata.snapshots())
-        .allSatisfy(snapshot -> assertThat(snapshot.manifestListLocation()).startsWith(metadataDir));
+        .allSatisfy(
+            snapshot -> assertThat(snapshot.manifestListLocation()).startsWith(metadataDir));
     assertThat(metadata.previousFiles())
         .allSatisfy(entry -> assertThat(entry.file()).startsWith(metadataDir));
   }

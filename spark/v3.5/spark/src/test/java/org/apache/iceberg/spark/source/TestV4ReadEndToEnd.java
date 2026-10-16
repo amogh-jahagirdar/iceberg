@@ -97,7 +97,6 @@ class TestV4ReadEndToEnd extends TestBaseWithCatalog {
     }
 
     String storedLocation = json.get("snapshots").get(0).get("manifest-list").asText();
-    assertThat(table.location() + "/" + storedLocation)
-        .isEqualTo(snapshot.manifestListLocation());
+    assertThat(table.location() + "/" + storedLocation).isEqualTo(snapshot.manifestListLocation());
   }
 }
