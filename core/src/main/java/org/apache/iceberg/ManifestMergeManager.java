@@ -66,6 +66,8 @@ abstract class ManifestMergeManager<F extends ContentFile<F>> {
 
   protected abstract PartitionSpec spec(int specId);
 
+  protected abstract Map<Integer, PartitionSpec> specsById();
+
   protected abstract void deleteFile(String location);
 
   protected abstract ManifestWriter<F> newManifestWriter(PartitionSpec spec);
@@ -131,8 +133,10 @@ abstract class ManifestMergeManager<F extends ContentFile<F>> {
     ListMultimap<Integer, ManifestFile> groups =
         Multimaps.newListMultimap(
             Maps.newTreeMap(Comparator.<Integer>reverseOrder()), Lists::newArrayList);
-    groups.put(first.partitionSpecId(), first);
-    remaining.forEachRemaining(manifest -> groups.put(manifest.partitionSpecId(), manifest));
+    Map<Integer, PartitionSpec> specsById = specsById();
+    groups.put(TrackedFileAdapters.partitionSpecId(first, specsById), first);
+    remaining.forEachRemaining(
+        manifest -> groups.put(TrackedFileAdapters.partitionSpecId(manifest, specsById), manifest));
     return groups;
   }
 

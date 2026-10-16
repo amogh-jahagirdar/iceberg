@@ -74,6 +74,14 @@ class TrackedFileAdapters {
     return manifest instanceof TrackedManifestFile trackedManifest ? trackedManifest.file : null;
   }
 
+  static int partitionSpecId(ManifestFile manifest, Map<Integer, PartitionSpec> specsById) {
+    if (manifest instanceof TrackedManifestFile trackedManifest) {
+      return resolveSpecId(trackedManifest.file, specsById);
+    }
+
+    return manifest.partitionSpecId();
+  }
+
   /** Shared base for data and delete file adapters. */
   private abstract static class TrackedFileAdapter<F extends ContentFile<F>>
       implements ContentFile<F>, Serializable {
@@ -413,8 +421,13 @@ class TrackedFileAdapters {
 
     @Override
     public int partitionSpecId() {
-      throw new UnsupportedOperationException(
-          "v4 manifests are not bound to a single partition spec");
+      Integer specId = file.specId();
+      if (specId == null) {
+        throw new UnsupportedOperationException(
+            "Cannot resolve null partition spec ID without table specs: " + file.location());
+      }
+
+      return specId;
     }
 
     @Override
