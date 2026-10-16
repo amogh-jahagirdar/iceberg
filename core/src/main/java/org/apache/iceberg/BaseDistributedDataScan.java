@@ -146,6 +146,10 @@ abstract class BaseDistributedDataScan
   protected CloseableIterable<ScanTask> doPlanFiles() {
     Snapshot snapshot = snapshot();
 
+    if (V4Metadata.hasRootManifest(snapshot)) {
+      return planRootManifest(snapshot);
+    }
+
     List<ManifestFile> deleteManifests = findMatchingDeleteManifests(snapshot);
     boolean mayHaveEqualityDeletes = !deleteManifests.isEmpty() && mayHaveEqualityDeletes(snapshot);
     boolean planDeletesLocally = shouldPlanDeletesLocally(deleteManifests, mayHaveEqualityDeletes);
@@ -185,6 +189,29 @@ abstract class BaseDistributedDataScan
     } finally {
       monitorPool.shutdown();
     }
+  }
+
+  private CloseableIterable<ScanTask> planRootManifest(Snapshot snapshot) {
+    ManifestExpander expander =
+        new ManifestExpander(
+                table().io(),
+                V4Metadata.rootManifest(snapshot, table().io()),
+                tableSchema(),
+                specs(),
+                table().location())
+            .caseSensitive(isCaseSensitive())
+            .filterData(filter())
+            .scanMetrics(scanMetrics());
+
+    if (shouldIgnoreResiduals()) {
+      expander = expander.ignoreResiduals();
+    }
+
+    if (shouldPlanWithExecutor()) {
+      expander = expander.planWith(planExecutor());
+    }
+
+    return CloseableIterable.transform(expander.planFiles(), task -> (ScanTask) task);
   }
 
   @Override

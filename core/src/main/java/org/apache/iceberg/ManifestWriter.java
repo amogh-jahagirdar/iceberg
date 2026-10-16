@@ -269,7 +269,7 @@ public abstract class ManifestWriter<F extends ContentFile<F>> implements FileAp
   }
 
   static class V4Writer extends ManifestWriter<DataFile> {
-    private final V4Metadata.ManifestEntryWrapper<DataFile> entryWrapper;
+    private final V4Metadata.TrackedFileWrapper entryWrapper;
 
     V4Writer(
         PartitionSpec spec,
@@ -278,7 +278,7 @@ public abstract class ManifestWriter<F extends ContentFile<F>> implements FileAp
         Long firstRowId,
         Map<String, String> writerProperties) {
       super(spec, file, snapshotId, firstRowId, writerProperties);
-      this.entryWrapper = new V4Metadata.ManifestEntryWrapper<>(snapshotId, spec.partitionType());
+      this.entryWrapper = new V4Metadata.TrackedFileWrapper(snapshotId, spec);
     }
 
     @Override
@@ -289,12 +289,13 @@ public abstract class ManifestWriter<F extends ContentFile<F>> implements FileAp
     @Override
     protected FileAppender<ManifestEntry<DataFile>> newAppender(
         PartitionSpec spec, OutputFile file) {
-      Schema manifestSchema = V4Metadata.entrySchema(spec.partitionType());
+      Schema manifestSchema = V4Metadata.manifestSchema(spec);
       try {
         return InternalData.write(format(), file)
             .schema(manifestSchema)
-            .named("manifest_entry")
+            .named("tracked_file")
             .meta("schema", SchemaParser.toJson(spec.schema()))
+            .meta("schema-id", String.valueOf(spec.schema().schemaId()))
             .meta("partition-spec", PartitionSpecParser.toJsonFields(spec))
             .meta("partition-spec-id", String.valueOf(spec.specId()))
             .meta("format-version", "4")

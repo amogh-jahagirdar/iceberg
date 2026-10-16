@@ -30,6 +30,7 @@ import org.apache.iceberg.relocated.com.google.common.base.MoreObjects;
 import org.apache.iceberg.relocated.com.google.common.base.Objects;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Iterables;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 
@@ -46,6 +47,8 @@ class BaseSnapshot implements Snapshot {
   private final Long firstRowId;
   private final Long addedRows;
   private final String keyId;
+  // used to resolve relative locations in a v4 root manifest
+  private final String tableLocation;
 
   // lazily initialized
   private transient List<ManifestFile> allManifests = null;
@@ -68,6 +71,34 @@ class BaseSnapshot implements Snapshot {
       Long firstRowId,
       Long addedRows,
       String keyId) {
+    this(
+        sequenceNumber,
+        snapshotId,
+        parentId,
+        timestampMillis,
+        operation,
+        summary,
+        schemaId,
+        manifestList,
+        firstRowId,
+        addedRows,
+        keyId,
+        null);
+  }
+
+  BaseSnapshot(
+      long sequenceNumber,
+      long snapshotId,
+      Long parentId,
+      long timestampMillis,
+      String operation,
+      Map<String, String> summary,
+      Integer schemaId,
+      String manifestList,
+      Long firstRowId,
+      Long addedRows,
+      String keyId,
+      String tableLocation) {
     Preconditions.checkArgument(
         firstRowId == null || firstRowId >= 0,
         "Invalid first-row-id (cannot be negative): %s",
@@ -91,6 +122,7 @@ class BaseSnapshot implements Snapshot {
     this.firstRowId = firstRowId;
     this.addedRows = firstRowId != null ? addedRows : null;
     this.keyId = keyId;
+    this.tableLocation = tableLocation;
   }
 
   BaseSnapshot(
@@ -114,6 +146,7 @@ class BaseSnapshot implements Snapshot {
     this.firstRowId = null;
     this.addedRows = null;
     this.keyId = null;
+    this.tableLocation = null;
   }
 
   @Override
@@ -180,6 +213,10 @@ class BaseSnapshot implements Snapshot {
                   new GenericManifestFile(fileIO.newInputFile(location), 0, this.snapshotId));
     }
 
+    if (allManifests == null && V4Metadata.hasRootManifest(this)) {
+      this.allManifests = readRootManifest(fileIO);
+    }
+
     if (allManifests == null) {
       // if manifests isn't set, then the snapshotFile is set and should be read to get the list
       this.allManifests =
@@ -198,6 +235,31 @@ class BaseSnapshot implements Snapshot {
               Iterables.filter(
                   allManifests, manifest -> manifest.content() == ManifestContent.DELETES));
     }
+  }
+
+  private List<ManifestFile> readRootManifest(FileIO fileIO) {
+    ManifestFile rootManifest = V4Metadata.rootManifest(this, fileIO);
+    // manifest entries have no partition or stats, so the table schema and specs are not needed
+    V4ManifestReader.Builder builder =
+        V4ManifestReader.builder(rootManifest, fileIO, new Schema(), ImmutableMap.of())
+            .metricsConfig(MetricsConfig.getDefault());
+    if (tableLocation != null) {
+      builder.tableLocation(tableLocation);
+    }
+
+    try (V4ManifestReader reader = builder.build()) {
+      return ImmutableList.copyOf(
+          Iterables.transform(
+              Iterables.filter(reader, BaseSnapshot::isManifest),
+              TrackedFileAdapters::asManifestFile));
+    } catch (IOException e) {
+      throw new RuntimeIOException(e, "Failed to read root manifest: %s", manifestListLocation);
+    }
+  }
+
+  private static boolean isManifest(TrackedFile file) {
+    return file.contentType() == FileContent.DATA_MANIFEST
+        || file.contentType() == FileContent.DELETE_MANIFEST;
   }
 
   @Override
