@@ -35,6 +35,18 @@ import org.apache.iceberg.relocated.com.google.common.collect.Iterables;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 
 class BaseSnapshot implements Snapshot {
+  private static final Schema ROOT_MANIFEST_PROJECTION =
+      new Schema(
+          TrackedFile.TRACKING,
+          TrackedFile.CONTENT_TYPE,
+          TrackedFile.LOCATION,
+          TrackedFile.FILE_FORMAT,
+          TrackedFile.RECORD_COUNT,
+          TrackedFile.FILE_SIZE_IN_BYTES,
+          TrackedFile.SPEC_ID,
+          TrackedFile.MANIFEST_INFO,
+          TrackedFile.KEY_METADATA);
+
   private final long snapshotId;
   private final Long parentId;
   private final long sequenceNumber;
@@ -239,10 +251,11 @@ class BaseSnapshot implements Snapshot {
 
   private List<ManifestFile> readRootManifest(FileIO fileIO) {
     ManifestFile rootManifest = V4Metadata.rootManifest(this, fileIO);
-    // manifest entries have no partition or stats, so the table schema and specs are not needed
+    // read only the manifest fields. The partition and content stats need the table schema.
     V4ManifestReader.Builder builder =
         V4ManifestReader.builder(rootManifest, fileIO, new Schema(), ImmutableMap.of())
-            .metricsConfig(MetricsConfig.getDefault());
+            .metricsConfig(MetricsConfig.getDefault())
+            .project(ROOT_MANIFEST_PROJECTION);
     if (tableLocation != null) {
       builder.tableLocation(tableLocation);
     }

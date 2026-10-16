@@ -75,6 +75,19 @@ class TestV4ReadEndToEnd extends TestBaseWithCatalog {
   }
 
   @TestTemplate
+  void readsRowsAfterSecondInsert() {
+    sql("INSERT INTO %s VALUES (4, 'd'), (5, 'e')", tableName);
+
+    assertEquals(
+        "Should read the rows from both inserts",
+        ImmutableList.of(row(1L, "a"), row(2L, "b"), row(3L, "c"), row(4L, "d"), row(5L, "e")),
+        sql("SELECT * FROM %s ORDER BY id", tableName));
+
+    Table table = validationCatalog.loadTable(tableIdent);
+    assertThat(table.snapshots()).hasSize(2);
+  }
+
+  @TestTemplate
   void readsFilesTable() {
     assertEquals(
         "Files table should count the inserted rows",
