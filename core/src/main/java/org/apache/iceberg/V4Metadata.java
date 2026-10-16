@@ -707,7 +707,8 @@ class V4Metadata {
               case StatsUtil.LOWER_BOUND_OFFSET -> bound(field.type(), file.lowerBounds(), fieldId);
               case StatsUtil.UPPER_BOUND_OFFSET -> bound(field.type(), file.upperBounds(), fieldId);
               case StatsUtil.VALUE_COUNT_OFFSET -> valueOrNull(file.valueCounts(), fieldId);
-              case StatsUtil.NULL_VALUE_COUNT_OFFSET -> valueOrNull(file.nullValueCounts(), fieldId);
+              case StatsUtil.NULL_VALUE_COUNT_OFFSET ->
+                  valueOrNull(file.nullValueCounts(), fieldId);
               case StatsUtil.NAN_VALUE_COUNT_OFFSET -> valueOrNull(file.nanValueCounts(), fieldId);
               case StatsUtil.TOTAL_BYTES_OFFSET -> valueOrNull(file.totalBytes(), fieldId);
               default -> null;

@@ -81,8 +81,7 @@ abstract class BaseFilesTable extends BaseMetadataTable {
         CloseableIterable.filter(
             manifests,
             manifest ->
-                isV4Manifest(manifest)
-                    || evalCache.get(manifest.partitionSpecId()).eval(manifest));
+                isV4Manifest(manifest) || evalCache.get(manifest.partitionSpecId()).eval(manifest));
 
     Expression filter = ignoreResiduals ? Expressions.alwaysTrue() : rowFilter;
 

@@ -185,7 +185,9 @@ class TestManifestExpander {
 
   private static ManifestFile writeLeaf(String... fileNames) throws IOException {
     String location =
-        TABLE_LOCATION + "/metadata/" + FileFormat.PARQUET.addExtension("leaf-" + System.nanoTime());
+        TABLE_LOCATION
+            + "/metadata/"
+            + FileFormat.PARQUET.addExtension("leaf-" + System.nanoTime());
     ManifestWriter<DataFile> writer =
         ManifestFiles.write(4, BASE.spec(), IO.newOutputFile(location), SNAPSHOT_ID);
     try (writer) {
@@ -204,7 +206,9 @@ class TestManifestExpander {
 
   private static Snapshot writeRoot(Consumer<RootManifestWriter> addEntries) throws IOException {
     String location =
-        TABLE_LOCATION + "/metadata/" + FileFormat.PARQUET.addExtension("root-" + System.nanoTime());
+        TABLE_LOCATION
+            + "/metadata/"
+            + FileFormat.PARQUET.addExtension("root-" + System.nanoTime());
     try (RootManifestWriter writer =
         new RootManifestWriter(
             IO.newOutputFile(location),

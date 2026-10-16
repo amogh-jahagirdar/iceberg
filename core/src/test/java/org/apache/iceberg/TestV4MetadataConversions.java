@@ -351,10 +351,11 @@ class TestV4MetadataConversions {
     assertThat(file.tracking().firstRowId()).isEqualTo(50L);
   }
 
-  private static ManifestFile writeLeaf(PartitionSpec spec, DataFile... files)
-      throws IOException {
+  private static ManifestFile writeLeaf(PartitionSpec spec, DataFile... files) throws IOException {
     String location =
-        TABLE_LOCATION + "/metadata/" + FileFormat.PARQUET.addExtension("leaf-" + System.nanoTime());
+        TABLE_LOCATION
+            + "/metadata/"
+            + FileFormat.PARQUET.addExtension("leaf-" + System.nanoTime());
     ManifestWriter<DataFile> writer =
         ManifestFiles.write(4, spec, IO.newOutputFile(location), SNAPSHOT_ID);
     try (writer) {
@@ -374,7 +375,9 @@ class TestV4MetadataConversions {
   private static String writeRootLocation(TableMetadata base, ManifestFile... manifests)
       throws IOException {
     String location =
-        TABLE_LOCATION + "/metadata/" + FileFormat.PARQUET.addExtension("root-" + System.nanoTime());
+        TABLE_LOCATION
+            + "/metadata/"
+            + FileFormat.PARQUET.addExtension("root-" + System.nanoTime());
     try (RootManifestWriter writer =
         new RootManifestWriter(
             IO.newOutputFile(location),
