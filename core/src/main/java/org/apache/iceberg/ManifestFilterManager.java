@@ -258,7 +258,8 @@ abstract class ManifestFilterManager<F extends ContentFile<F>> {
     SnapshotSummary.Builder summaryBuilder = SnapshotSummary.builder();
 
     for (ManifestFile manifest : manifests) {
-      PartitionSpec manifestSpec = specsById.get(manifest.partitionSpecId());
+      PartitionSpec manifestSpec =
+          specsById.get(TrackedFileAdapters.partitionSpecId(manifest, specsById));
       Pair<Set<F>, Integer> result = filteredManifestResults.get(manifest);
       if (result != null) {
         for (F file : result.first()) {
@@ -333,9 +334,9 @@ abstract class ManifestFilterManager<F extends ContentFile<F>> {
    * Deletes filtered manifests that were created by this class, but are not in the committed
    * manifest set.
    *
-   * @param committed the set of manifest files that were committed
+   * @param committed the set of manifest paths that were committed
    */
-  void cleanUncommitted(Set<ManifestFile> committed) {
+  void cleanUncommitted(Set<String> committed) {
     // iterate over a copy of entries to avoid concurrent modification
     List<Map.Entry<ManifestFile, ManifestFile>> filterEntries =
         Lists.newArrayList(filteredManifests.entrySet());
@@ -344,7 +345,7 @@ abstract class ManifestFilterManager<F extends ContentFile<F>> {
       // remove any new filtered manifests that aren't in the committed list
       ManifestFile manifest = entry.getKey();
       ManifestFile filtered = entry.getValue();
-      if (!committed.contains(filtered)) {
+      if (!committed.contains(filtered.path())) {
         // only delete if the filtered copy was created (manifest was replaced)
         if (!manifest.equals(filtered)) {
           deleteFile(filtered.path());
@@ -420,7 +421,9 @@ abstract class ManifestFilterManager<F extends ContentFile<F>> {
     if (deleteExpression != null && deleteExpression != Expressions.alwaysFalse()) {
       ManifestEvaluator manifestEvaluator =
           ManifestEvaluator.forRowFilter(
-              deleteExpression, specsById.get(manifest.partitionSpecId()), caseSensitive);
+              deleteExpression,
+              specsById.get(TrackedFileAdapters.partitionSpecId(manifest, specsById)),
+              caseSensitive);
       return manifestEvaluator.eval(manifest);
     }
 

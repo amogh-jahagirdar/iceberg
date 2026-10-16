@@ -19,6 +19,7 @@
 package org.apache.iceberg;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -72,18 +73,21 @@ class ReachableFileCleanup extends FileCleanupStrategy {
         }
       }
     }
-    Set<ManifestFile> deletionCandidates = readManifests(expiredSnapshots);
+    Map<String, ManifestFile> deletionCandidates = readManifests(expiredSnapshots);
 
     if (!deletionCandidates.isEmpty()) {
-      Set<ManifestFile> currentManifests = ConcurrentHashMap.newKeySet();
-      Set<ManifestFile> manifestsToDelete =
+      Map<String, ManifestFile> currentManifests = new ConcurrentHashMap<>();
+      Collection<ManifestFile> manifestsToDelete =
           pruneReferencedManifests(
-              snapshotsAfterExpiration, deletionCandidates, currentManifests::add);
+              snapshotsAfterExpiration,
+              deletionCandidates,
+              manifest -> currentManifests.putIfAbsent(manifest.path(), manifest));
 
       if (!manifestsToDelete.isEmpty()) {
         if (ExpireSnapshots.CleanupLevel.ALL == cleanupLevel) {
           Set<String> dataFilesToDelete =
-              findFilesToDelete(manifestsToDelete, currentManifests, beforeExpiration.specsById());
+              findFilesToDelete(
+                  manifestsToDelete, currentManifests.values(), beforeExpiration.specsById());
           LOG.debug("Deleting {} data files", dataFilesToDelete.size());
           deleteFiles(dataFilesToDelete, "data");
         }
@@ -106,12 +110,11 @@ class ReachableFileCleanup extends FileCleanupStrategy {
     }
   }
 
-  private Set<ManifestFile> pruneReferencedManifests(
+  private Collection<ManifestFile> pruneReferencedManifests(
       Set<Snapshot> snapshots,
-      Set<ManifestFile> deletionCandidates,
+      Map<String, ManifestFile> deletionCandidates,
       Consumer<ManifestFile> currentManifestCallback) {
-    Set<ManifestFile> candidateSet = ConcurrentHashMap.newKeySet();
-    candidateSet.addAll(deletionCandidates);
+    Map<String, ManifestFile> candidates = new ConcurrentHashMap<>(deletionCandidates);
     Tasks.foreach(snapshots)
         .retry(3)
         .stopOnFailure()
@@ -125,8 +128,8 @@ class ReachableFileCleanup extends FileCleanupStrategy {
             snapshot -> {
               try (CloseableIterable<ManifestFile> manifestFiles = readManifests(snapshot)) {
                 for (ManifestFile manifestFile : manifestFiles) {
-                  candidateSet.remove(manifestFile);
-                  if (candidateSet.isEmpty()) {
+                  candidates.remove(manifestFile.path());
+                  if (candidates.isEmpty()) {
                     return;
                   }
 
@@ -138,11 +141,11 @@ class ReachableFileCleanup extends FileCleanupStrategy {
               }
             });
 
-    return candidateSet;
+    return candidates.values();
   }
 
-  private Set<ManifestFile> readManifests(Set<Snapshot> snapshots) {
-    Set<ManifestFile> manifestFiles = ConcurrentHashMap.newKeySet();
+  private Map<String, ManifestFile> readManifests(Set<Snapshot> snapshots) {
+    Map<String, ManifestFile> manifestFiles = new ConcurrentHashMap<>();
     Tasks.foreach(snapshots)
         .retry(3)
         .stopOnFailure()
@@ -156,7 +159,7 @@ class ReachableFileCleanup extends FileCleanupStrategy {
             snapshot -> {
               try (CloseableIterable<ManifestFile> manifests = readManifests(snapshot)) {
                 for (ManifestFile manifestFile : manifests) {
-                  manifestFiles.add(manifestFile.copy());
+                  manifestFiles.putIfAbsent(manifestFile.path(), manifestFile.copy());
                 }
               } catch (IOException e) {
                 throw new RuntimeIOException(
@@ -168,8 +171,8 @@ class ReachableFileCleanup extends FileCleanupStrategy {
   }
 
   private Set<String> findFilesToDelete(
-      Set<ManifestFile> manifestFilesToDelete,
-      Set<ManifestFile> currentManifestFiles,
+      Collection<ManifestFile> manifestFilesToDelete,
+      Collection<ManifestFile> currentManifestFiles,
       Map<Integer, PartitionSpec> specsById) {
     Set<String> filesToDelete = ConcurrentHashMap.newKeySet();
 

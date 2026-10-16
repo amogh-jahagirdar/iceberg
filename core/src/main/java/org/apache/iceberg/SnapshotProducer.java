@@ -90,7 +90,7 @@ import org.slf4j.LoggerFactory;
 abstract class SnapshotProducer<ThisT> implements SnapshotUpdate<ThisT> {
   private static final Logger LOG = LoggerFactory.getLogger(SnapshotProducer.class);
   static final int MIN_FILE_GROUP_SIZE = 10_000;
-  static final Set<ManifestFile> EMPTY_SET = Sets.newHashSet();
+  static final Set<String> EMPTY_SET = Sets.newHashSet();
 
   /** Default callback used to delete files. */
   private final Consumer<String> defaultDelete =
@@ -267,7 +267,7 @@ abstract class SnapshotProducer<ThisT> implements SnapshotUpdate<ThisT> {
    *
    * @param committed a set of manifest paths that were actually committed
    */
-  protected abstract void cleanUncommitted(Set<ManifestFile> committed);
+  protected abstract void cleanUncommitted(Set<String> committed);
 
   /**
    * A string that describes the action that produced the new snapshot.
@@ -626,7 +626,9 @@ abstract class SnapshotProducer<ThisT> implements SnapshotUpdate<ThisT> {
         Snapshot saved = ops.refresh().snapshot(newSnapshotId.get());
         if (saved != null) {
           if (cleanupAfterCommit()) {
-            cleanUncommitted(Sets.newHashSet(saved.allManifests(ops.io())));
+            Set<String> committed = Sets.newHashSet();
+            saved.allManifests(ops.io()).forEach(manifest -> committed.add(manifest.path()));
+            cleanUncommitted(committed);
           }
 
           // also clean up unused manifest lists created by multiple attempts
@@ -854,10 +856,10 @@ abstract class SnapshotProducer<ThisT> implements SnapshotUpdate<ThisT> {
 
   // Deletes uncommitted manifests; clears list if clearManifests and any deleted.
   protected void deleteUncommitted(
-      Collection<ManifestFile> manifests, Set<ManifestFile> committed, boolean clearManifests) {
+      Collection<ManifestFile> manifests, Set<String> committed, boolean clearManifests) {
     boolean anyDeleted = false;
     for (ManifestFile manifest : manifests) {
-      if (!committed.contains(manifest)) {
+      if (!committed.contains(manifest.path())) {
         deleteFile(manifest.path());
         anyDeleted = true;
       }
@@ -926,9 +928,10 @@ abstract class SnapshotProducer<ThisT> implements SnapshotUpdate<ThisT> {
   }
 
   private static ManifestFile addMetadata(TableOperations ops, ManifestFile manifest) {
-    try (ManifestReader<DataFile> reader =
-        ManifestFiles.read(manifest, ops.io(), ops.current().specsById())) {
-      PartitionSummary stats = new PartitionSummary(ops.current().spec(manifest.partitionSpecId()));
+    Map<Integer, PartitionSpec> specsById = ops.current().specsById();
+    int specId = TrackedFileAdapters.partitionSpecId(manifest, specsById);
+    try (ManifestReader<DataFile> reader = ManifestFiles.read(manifest, ops.io(), specsById)) {
+      PartitionSummary stats = new PartitionSummary(specsById.get(specId));
       int addedFiles = 0;
       long addedRows = 0L;
       int existingFiles = 0;
@@ -975,7 +978,7 @@ abstract class SnapshotProducer<ThisT> implements SnapshotUpdate<ThisT> {
       return new GenericManifestFile(
           manifest.path(),
           manifest.length(),
-          manifest.partitionSpecId(),
+          specId,
           ManifestContent.DATA,
           manifest.sequenceNumber(),
           manifest.minSequenceNumber(),
@@ -988,7 +991,8 @@ abstract class SnapshotProducer<ThisT> implements SnapshotUpdate<ThisT> {
           existingRows,
           deletedFiles,
           deletedRows,
-          null);
+          null,
+          manifest.formatVersion());
 
     } catch (IOException e) {
       throw new RuntimeIOException(e, "Failed to read manifest: %s", manifest.path());

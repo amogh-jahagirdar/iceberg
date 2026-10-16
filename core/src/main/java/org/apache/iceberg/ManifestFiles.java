@@ -57,6 +57,14 @@ public class ManifestFiles {
 
   private static final Logger LOG = LoggerFactory.getLogger(ManifestFiles.class);
 
+  // the v4 manifest writer writes stats for all columns
+  private static final Map<String, String> ALL_STATS_PROPERTIES =
+      ImmutableMap.of(
+          TableProperties.DEFAULT_WRITE_METRICS_MODE,
+          "full",
+          TableProperties.METRICS_MAX_INFERRED_COLUMN_DEFAULTS,
+          String.valueOf(Integer.MAX_VALUE));
+
   private static final org.apache.avro.Schema MANIFEST_AVRO_SCHEMA =
       AvroSchemaUtil.convert(
           ManifestFile.schema(),
@@ -139,6 +147,10 @@ public class ManifestFiles {
         manifest.content() == ManifestContent.DATA,
         "Cannot read a delete manifest with a ManifestReader: %s",
         manifest);
+    if (manifest.formatVersion() == V4Metadata.FORMAT_VERSION) {
+      return new TrackedFileManifestReader(manifest, io, specsById, isCommitted);
+    }
+
     InputFile file = newInputFile(io, manifest);
     InheritableMetadata inheritableMetadata = InheritableMetadataFactory.fromManifest(manifest);
     return new ManifestReader<>(
@@ -607,5 +619,49 @@ public class ManifestFiles {
     List<T> list = Lists.newArrayList(collection);
     int groupSize = IntMath.divide(list.size(), groupCount, RoundingMode.CEILING);
     return Lists.partition(list, groupSize);
+  }
+
+  /** Reads a v4 data manifest as manifest entries for callers of {@link ManifestReader}. */
+  private static class TrackedFileManifestReader extends ManifestReader<DataFile> {
+    private final ManifestFile manifest;
+    private final FileIO io;
+    private final Map<Integer, PartitionSpec> specsById;
+    private final boolean isCommitted;
+
+    private TrackedFileManifestReader(
+        ManifestFile manifest,
+        FileIO io,
+        Map<Integer, PartitionSpec> specsById,
+        boolean isCommitted) {
+      // V4ManifestReader applies inheritance
+      super(
+          io.newInputFile(manifest),
+          TrackedFileAdapters.partitionSpecId(manifest, specsById),
+          specsById,
+          InheritableMetadataFactory.empty(),
+          manifest.firstRowId(),
+          isCommitted,
+          FileType.DATA_FILES);
+      this.manifest = manifest;
+      this.io = io;
+      this.specsById = specsById;
+      this.isCommitted = isCommitted;
+    }
+
+    // this reader reads all columns and ignores the projection
+    @Override
+    CloseableIterable<ManifestEntry<DataFile>> open(Schema projection) {
+      Schema tableSchema = spec().schema();
+      V4ManifestReader.Builder builder =
+          isCommitted
+              ? V4ManifestReader.builder(manifest, io, tableSchema, specsById)
+              : V4ManifestReader.uncommitted(manifest, io, tableSchema, specsById);
+      MetricsConfig metricsConfig =
+          MetricsConfig.from(ALL_STATS_PROPERTIES, tableSchema, SortOrder.unsorted());
+      V4ManifestReader reader = builder.metricsConfig(metricsConfig).allEntries().build();
+      addCloseable(reader);
+      return CloseableIterable.transform(
+          reader, file -> TrackedFileAdapters.asDataEntry(file, specsById));
+    }
   }
 }

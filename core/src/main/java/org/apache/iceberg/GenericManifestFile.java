@@ -60,6 +60,7 @@ public class GenericManifestFile extends SupportsIndexProjection
   private PartitionFieldSummary[] partitions = null;
   private byte[] keyMetadata = null;
   private Long firstRowId = null;
+  private int formatVersion = 0;
 
   /** Used by Avro reflection to instantiate this class when reading manifest files. */
   public GenericManifestFile(Schema avroSchema) {
@@ -112,6 +113,44 @@ public class GenericManifestFile extends SupportsIndexProjection
       Integer deletedFilesCount,
       Long deletedRowsCount,
       Long firstRowId) {
+    this(
+        path,
+        length,
+        specId,
+        content,
+        sequenceNumber,
+        minSequenceNumber,
+        snapshotId,
+        partitions,
+        keyMetadata,
+        addedFilesCount,
+        addedRowsCount,
+        existingFilesCount,
+        existingRowsCount,
+        deletedFilesCount,
+        deletedRowsCount,
+        firstRowId,
+        0);
+  }
+
+  GenericManifestFile(
+      String path,
+      long length,
+      int specId,
+      ManifestContent content,
+      long sequenceNumber,
+      long minSequenceNumber,
+      Long snapshotId,
+      List<PartitionFieldSummary> partitions,
+      ByteBuffer keyMetadata,
+      Integer addedFilesCount,
+      Long addedRowsCount,
+      Integer existingFilesCount,
+      Long existingRowsCount,
+      Integer deletedFilesCount,
+      Long deletedRowsCount,
+      Long firstRowId,
+      int formatVersion) {
     super(ManifestFile.schema().columns().size());
     this.avroSchema = AVRO_SCHEMA;
     this.manifestPath = path;
@@ -130,6 +169,7 @@ public class GenericManifestFile extends SupportsIndexProjection
     this.partitions = partitions == null ? null : partitions.toArray(new PartitionFieldSummary[0]);
     this.keyMetadata = ByteBuffers.toByteArray(keyMetadata);
     this.firstRowId = firstRowId;
+    this.formatVersion = formatVersion;
   }
 
   /**
@@ -172,6 +212,7 @@ public class GenericManifestFile extends SupportsIndexProjection
             ? null
             : Arrays.copyOf(toCopy.keyMetadata, toCopy.keyMetadata.length);
     this.firstRowId = toCopy.firstRowId;
+    this.formatVersion = toCopy.formatVersion;
   }
 
   /** Constructor for Java serialization. */
@@ -270,6 +311,11 @@ public class GenericManifestFile extends SupportsIndexProjection
   @Override
   public Long firstRowId() {
     return firstRowId;
+  }
+
+  @Override
+  public int formatVersion() {
+    return formatVersion;
   }
 
   @Override
@@ -468,7 +514,8 @@ public class GenericManifestFile extends SupportsIndexProjection
                 toCopy.existingRowsCount(),
                 toCopy.deletedFilesCount(),
                 toCopy.deletedRowsCount(),
-                toCopy.firstRowId());
+                toCopy.firstRowId(),
+                toCopy.formatVersion());
       }
     }
 

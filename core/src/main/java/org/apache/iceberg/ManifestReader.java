@@ -306,7 +306,7 @@ public class ManifestReader<F extends ContentFile<F>> extends CloseableGroup
         || partitionSet.contains(fileToCheck.specId(), fileToCheck.partition());
   }
 
-  private CloseableIterable<ManifestEntry<F>> open(Schema projection) {
+  CloseableIterable<ManifestEntry<F>> open(Schema projection) {
     FileFormat format = FileFormat.fromFileName(file.location());
     Preconditions.checkArgument(
         format != null, "Unable to determine format of manifest: %s", file.location());

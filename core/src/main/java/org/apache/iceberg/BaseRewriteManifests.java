@@ -263,7 +263,7 @@ public class BaseRewriteManifests extends SnapshotProducer<RewriteManifests>
                                 appendEntry(
                                     entry,
                                     clusterByFunc.apply(entry.file()),
-                                    manifest.partitionSpecId()));
+                                    TrackedFileAdapters.partitionSpecId(manifest, specsById)));
 
                   } catch (IOException x) {
                     throw new RuntimeIOException(x);
@@ -343,7 +343,7 @@ public class BaseRewriteManifests extends SnapshotProducer<RewriteManifests>
   }
 
   @Override
-  protected void cleanUncommitted(Set<ManifestFile> committed) {
+  protected void cleanUncommitted(Set<String> committed) {
     deleteUncommitted(newManifests, committed, false);
     // clean up only rewrittenAddedManifests as they are always owned by the table
     // don't clean up addedManifests as they are added to the manifest list and are not compacted

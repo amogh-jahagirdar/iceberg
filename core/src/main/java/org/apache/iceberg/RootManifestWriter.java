@@ -105,7 +105,7 @@ class RootManifestWriter implements Closeable {
             .replacedRowsCount(0L)
             .modifiedRowsCount(0L)
             .minSequenceNumber(assigned(manifest.minSequenceNumber()))
-            .formatVersion(formatVersion(manifest))
+            .formatVersion(manifest.formatVersion())
             .build();
 
     return new TrackedFileStruct(
@@ -200,14 +200,6 @@ class RootManifestWriter implements Closeable {
   private Integer specId(ManifestFile manifest) {
     PartitionSpec spec = specsById.get(manifest.partitionSpecId());
     return spec.isPartitioned() ? spec.specId() : null;
-  }
-
-  // only data manifests are written with the v4 manifest schema
-  private static int formatVersion(ManifestFile manifest) {
-    boolean isV4 =
-        manifest.content() == ManifestContent.DATA
-            && FileFormat.fromFileName(manifest.path()) == FileFormat.PARQUET;
-    return isV4 ? V4Metadata.FORMAT_VERSION : V4Metadata.PRE_V4_FORMAT_VERSION;
   }
 
   private static long recordCount(ManifestInfo info) {

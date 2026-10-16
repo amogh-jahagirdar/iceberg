@@ -76,6 +76,7 @@ class V4ManifestReader extends CloseableGroup implements CloseableIterable<Track
   private final Map<Integer, StructProjection> partitionProjections; // by spec ID
   private final Set<Integer> requestedStatsFieldIds;
   private final boolean isUncommitted;
+  private final boolean allEntries;
   private final ScanMetrics scanMetrics;
 
   private Long nextRowId = null;
@@ -90,6 +91,7 @@ class V4ManifestReader extends CloseableGroup implements CloseableIterable<Track
       Map<Integer, StructProjection> partitionProjections,
       Set<Integer> requestedStatsFieldIds,
       boolean isUncommitted,
+      boolean allEntries,
       ScanMetrics scanMetrics) {
     this.manifest = manifest;
     this.dv = manifest.manifestDeletionVector();
@@ -101,6 +103,7 @@ class V4ManifestReader extends CloseableGroup implements CloseableIterable<Track
     this.partitionProjections = partitionProjections;
     this.requestedStatsFieldIds = requestedStatsFieldIds;
     this.isUncommitted = isUncommitted;
+    this.allEntries = allEntries;
     this.scanMetrics = scanMetrics;
 
     // initialize the next row ID to the manifest's first row ID
@@ -122,11 +125,9 @@ class V4ManifestReader extends CloseableGroup implements CloseableIterable<Track
     files = CloseableIterable.transform(files, this::projectPartition);
 
     if (dv != null) {
-      files =
-          CloseableIterable.filter(
-              files, file -> file.tracking().isLive() && !isDeletedByMDV(file));
+      files = CloseableIterable.filter(files, file -> isIncluded(file) && !isDeletedByMDV(file));
     } else {
-      files = CloseableIterable.filter(files, file -> file.tracking().isLive());
+      files = CloseableIterable.filter(files, this::isIncluded);
     }
 
     if (statsFilter != null) {
@@ -135,7 +136,7 @@ class V4ManifestReader extends CloseableGroup implements CloseableIterable<Track
               this::incrementSkipCount,
               files,
               file -> statsFilter.eval(file.contentStats(), file.recordCount()));
-    } else {
+    } else if (!allEntries) {
       files =
           CloseableIterable.filter(
               this::incrementSkipCount, files, file -> file.recordCount() != 0L);
@@ -175,6 +176,10 @@ class V4ManifestReader extends CloseableGroup implements CloseableIterable<Track
     }
 
     return file;
+  }
+
+  private boolean isIncluded(TrackedFile file) {
+    return allEntries || file.tracking().isLive();
   }
 
   private boolean isDeletedByMDV(TrackedFile file) {
@@ -280,6 +285,7 @@ class V4ManifestReader extends CloseableGroup implements CloseableIterable<Track
     private final Types.StructType unionPartitionType;
     private final Map<Integer, PartitionSpec> specsById;
     private final boolean isUncommitted;
+    private boolean allEntries = false;
     private String tableLocation = null;
     private Expression rowFilter = Expressions.alwaysTrue();
     private boolean caseSensitive = true;
@@ -352,6 +358,12 @@ class V4ManifestReader extends CloseableGroup implements CloseableIterable<Track
           requestedColumns == null && requestedProjection == null,
           "Cannot use forScanPlanning() with select(Iterable<String>) or project(Schema)");
       this.scanPlanning = true;
+      return this;
+    }
+
+    /** Configures the reader to return all entries, including deleted entries and empty files. */
+    Builder allEntries() {
+      this.allEntries = true;
       return this;
     }
 
@@ -433,6 +445,7 @@ class V4ManifestReader extends CloseableGroup implements CloseableIterable<Track
           partitionProjections(),
           requestedStatsFieldIds,
           isUncommitted,
+          allEntries,
           scanMetrics);
     }
 

@@ -42,6 +42,11 @@ class TrackedFileAdapters {
     return new TrackedDataFile(file, resolveSpecId(file, specsById));
   }
 
+  static ManifestEntry<DataFile> asDataEntry(
+      TrackedFile file, Map<Integer, PartitionSpec> specsById) {
+    return new TrackedDataEntry(file.tracking(), asDataFile(file, specsById));
+  }
+
   static DeleteFile asDVDeleteFile(TrackedFile file, Map<Integer, PartitionSpec> specsById) {
     Preconditions.checkArgument(
         file.contentType() == FileContent.DATA,
@@ -536,6 +541,74 @@ class TrackedFileAdapters {
     @Override
     public ManifestFile copy() {
       return new TrackedManifestFile(file.copy());
+    }
+  }
+
+  /** Adapts the tracking of a TrackedFile DATA entry to the {@link ManifestEntry} interface. */
+  private static class TrackedDataEntry implements ManifestEntry<DataFile> {
+    private final Tracking tracking;
+    private final DataFile file;
+
+    private TrackedDataEntry(Tracking tracking, DataFile file) {
+      this.tracking = tracking;
+      this.file = file;
+    }
+
+    @Override
+    public Status status() {
+      return switch (tracking.status()) {
+        case EXISTING -> Status.EXISTING;
+        case ADDED -> Status.ADDED;
+        case DELETED -> Status.DELETED;
+        case REPLACED, MODIFIED ->
+            throw new UnsupportedOperationException(
+                "Unsupported entry status: " + tracking.status());
+      };
+    }
+
+    @Override
+    public Long snapshotId() {
+      return tracking.snapshotId();
+    }
+
+    @Override
+    public void setSnapshotId(long snapshotId) {
+      throw new UnsupportedOperationException("Cannot modify tracked data entry");
+    }
+
+    @Override
+    public Long dataSequenceNumber() {
+      return tracking.dataSequenceNumber();
+    }
+
+    @Override
+    public void setDataSequenceNumber(long dataSequenceNumber) {
+      throw new UnsupportedOperationException("Cannot modify tracked data entry");
+    }
+
+    @Override
+    public Long fileSequenceNumber() {
+      return tracking.fileSequenceNumber();
+    }
+
+    @Override
+    public void setFileSequenceNumber(long fileSequenceNumber) {
+      throw new UnsupportedOperationException("Cannot modify tracked data entry");
+    }
+
+    @Override
+    public DataFile file() {
+      return file;
+    }
+
+    @Override
+    public ManifestEntry<DataFile> copy() {
+      return new TrackedDataEntry(tracking, file.copy());
+    }
+
+    @Override
+    public ManifestEntry<DataFile> copyWithoutStats() {
+      return new TrackedDataEntry(tracking, file.copyWithoutStats());
     }
   }
 

@@ -108,6 +108,10 @@ public abstract class ManifestWriter<F extends ContentFile<F>> implements FileAp
     return ManifestContent.DATA;
   }
 
+  int formatVersion() {
+    return V4Metadata.PRE_V4_FORMAT_VERSION;
+  }
+
   void addEntry(ManifestEntry<F> entry) {
     switch (entry.status()) {
       case ADDED:
@@ -246,7 +250,8 @@ public abstract class ManifestWriter<F extends ContentFile<F>> implements FileAp
         existingRows,
         deletedFiles,
         deletedRows,
-        firstRowId);
+        firstRowId,
+        formatVersion());
   }
 
   private ByteBuffer keyMetadataBuffer() {
@@ -279,6 +284,11 @@ public abstract class ManifestWriter<F extends ContentFile<F>> implements FileAp
         Map<String, String> writerProperties) {
       super(spec, file, snapshotId, firstRowId, writerProperties);
       this.entryWrapper = new V4Metadata.TrackedFileWrapper(snapshotId, spec);
+    }
+
+    @Override
+    int formatVersion() {
+      return V4Metadata.FORMAT_VERSION;
     }
 
     @Override
