@@ -1283,6 +1283,11 @@ abstract class MergingSnapshotProducer<ThisT> extends SnapshotProducer<ThisT> {
     }
 
     @Override
+    protected Map<Integer, PartitionSpec> specsById() {
+      return ops().current().specsById();
+    }
+
+    @Override
     protected void deleteFile(String location) {
       MergingSnapshotProducer.this.deleteFile(location);
     }
@@ -1344,6 +1349,11 @@ abstract class MergingSnapshotProducer<ThisT> extends SnapshotProducer<ThisT> {
     @Override
     protected PartitionSpec spec(int specId) {
       return ops().current().spec(specId);
+    }
+
+    @Override
+    protected Map<Integer, PartitionSpec> specsById() {
+      return ops().current().specsById();
     }
 
     @Override
