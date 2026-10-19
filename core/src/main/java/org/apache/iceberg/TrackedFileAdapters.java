@@ -1140,7 +1140,7 @@ class TrackedFileAdapters {
     return comparator.compare(left, right) <= 0 ? left : right;
   }
 
-  /** Bounds on a source column from all partition fields of one file. Null means unbounded. */
+  // bounds on a source column from all partition fields of one file; null means unbounded
   private static class PartitionBounds {
     private final Comparator<Object> comparator;
     private Object lower = null;

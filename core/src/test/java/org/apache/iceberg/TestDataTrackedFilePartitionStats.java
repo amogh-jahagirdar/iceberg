@@ -138,8 +138,7 @@ class TestDataTrackedFilePartitionStats {
   void nullPartitionValueMeansAllValuesAreNull() {
     PartitionSpec spec = PartitionSpec.builderFor(SCHEMA).identity("category").build();
 
-    FieldStats<?> category =
-        wrap(spec, file(spec, noMetrics(), (Object) null)).statsFor(CATEGORY);
+    FieldStats<?> category = wrap(spec, file(spec, noMetrics(), (Object) null)).statsFor(CATEGORY);
 
     assertThat(category.lowerBound()).isNull();
     assertThat(category.upperBound()).isNull();
@@ -155,8 +154,7 @@ class TestDataTrackedFilePartitionStats {
             .truncate("category", 4, "category_4")
             .build();
 
-    FieldStats<?> category =
-        wrap(spec, file(spec, noMetrics(), "bo", "book")).statsFor(CATEGORY);
+    FieldStats<?> category = wrap(spec, file(spec, noMetrics(), "bo", "book")).statsFor(CATEGORY);
 
     assertThat(category.lowerBound()).usingComparator(STRINGS).isEqualTo("book");
     assertThat(category.upperBound()).usingComparator(STRINGS).isEqualTo("bool");

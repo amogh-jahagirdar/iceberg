@@ -341,9 +341,9 @@ class StatsUtil {
   record Bounds(Object lower, Object upper) {}
 
   /**
-   * Returns source column bounds for a partition value, or null for a null value or void field.
+   * Returns source column bounds implied by a partition value, or null if the value implies none.
    *
-   * @throws UnsupportedOperationException if the field's transform does not preserve order
+   * @throws UnsupportedOperationException if bounds cannot be derived from the field's transform
    */
   static Bounds sourceBounds(Schema schema, PartitionField field, Object partitionValue) {
     Type sourceType = schema.findType(field.sourceId());
@@ -415,17 +415,18 @@ class StatsUtil {
       };
     }
 
-    // a value shorter than the width was not truncated
+    // truncateStringMax and truncateBinaryMax only increment input longer than the width
     private static Bounds truncatedString(String prefix, int width) {
+      // a value shorter than the width was not truncated
       if (prefix.codePointCount(0, prefix.length()) < width) {
         return new Bounds(prefix, prefix);
       }
 
-      // the extra character forces the prefix to be incremented
       return new Bounds(prefix, UnicodeUtil.truncateStringMax(prefix + "\u0000", width));
     }
 
     private static Bounds truncatedBinary(ByteBuffer prefix, int width) {
+      // a value shorter than the width was not truncated
       if (prefix.remaining() < width) {
         return new Bounds(prefix, prefix);
       }
@@ -467,6 +468,7 @@ class StatsUtil {
       return switch (sourceType.typeId()) {
         case DATE -> {
           LocalDate epoch = LocalDate.ofEpochDay(0);
+          // the day of a date is its epoch day, which old writers stored correctly
           long dateLowerPeriods = unit == ChronoUnit.DAYS ? periods : lowerPeriods;
           yield new Bounds(
               (int) epoch.plus(dateLowerPeriods, unit).toEpochDay(),
@@ -485,7 +487,6 @@ class StatsUtil {
       };
     }
 
-    // Saturate on overflow.
     private static long since(ChronoUnit unit, OffsetDateTime time) {
       try {
         return unit.between(EPOCH, time);
