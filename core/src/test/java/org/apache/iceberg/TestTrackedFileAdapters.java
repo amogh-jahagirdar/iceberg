@@ -819,6 +819,33 @@ class TestTrackedFileAdapters {
   }
 
   @Test
+  void dataTrackedFileAdapterContentStatsFromPartitionWithoutMetrics() {
+    TrackedFile result = partitionedAdapter().wrap(partitionedFile(PARTITIONED_SPEC_ID, PARTITION));
+
+    FieldStats<?> categoryStats = result.contentStats().statsFor(1);
+    assertThat(categoryStats.valueCount()).isEqualTo(100L);
+    assertThat(categoryStats.nullValueCount()).isEqualTo(0L);
+
+    Comparator<Object> comparator = Comparators.forType(Types.StringType.get());
+    assertThat(categoryStats.lowerBound()).usingComparator(comparator).isEqualTo("books");
+    assertThat(categoryStats.upperBound()).usingComparator(comparator).isEqualTo("books");
+  }
+
+  @Test
+  void dataTrackedFileAdapterRejectsBucketPartitionedFile() {
+    PartitionSpec bucketSpec =
+        PartitionSpec.builderFor(PARTITION_SCHEMA).bucket("category", 16).withSpecId(2).build();
+    PartitionData bucketPartition = new PartitionData(bucketSpec.partitionType());
+    bucketPartition.set(0, 3);
+    TrackedFileAdapters.DataTrackedFile adapter =
+        TrackedFileAdapters.forDataFile(PARTITION_SCHEMA, bucketSpec);
+
+    assertThatThrownBy(() -> adapter.wrap(partitionedFile(2, bucketPartition)))
+        .isInstanceOf(UnsupportedOperationException.class)
+        .hasMessageContaining("bucket");
+  }
+
+  @Test
   void dataTrackedFileAdapterUnwrapsToOriginalTrackedFile() {
     TrackedFile original = trackedFile(FileContent.DATA);
     DataFile adapted = TrackedFileAdapters.asDataFile(original, UNPARTITIONED);
@@ -997,6 +1024,24 @@ class TestTrackedFileAdapters {
     PartitionData partition = new PartitionData(PARTITIONED_SPEC.partitionType());
     partition.set(0, category);
     return partition;
+  }
+
+  private static TrackedFileAdapters.DataTrackedFile partitionedAdapter() {
+    return TrackedFileAdapters.forDataFile(PARTITION_SCHEMA, PARTITIONED_SPEC);
+  }
+
+  private static DataFile partitionedFile(int specId, PartitionData partition) {
+    return new GenericDataFile(
+        specId,
+        DATA_FILE_LOCATION,
+        FileFormat.PARQUET,
+        partition,
+        1024L,
+        new Metrics(100L, null, null, null, null),
+        null,
+        ImmutableList.of(0L),
+        null,
+        null);
   }
 
   /** Minimal file for the rejection and null-tracking tests. */

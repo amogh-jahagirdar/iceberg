@@ -589,13 +589,13 @@ class TrackedFileAdapters {
           newFile.specId());
 
       this.file = newFile;
-      this.stats = hasContentStats(newFile) ? wrapStats(newFile) : null;
+      this.stats = wrapStats(newFile);
     }
 
     private ContentStats wrapStats(DataFile dataFile) {
       Map<Integer, PartitionBounds> boundsBySourceId = partitionBounds(dataFile);
       if (boundsBySourceId.isEmpty()) {
-        return statsWrapper.wrap(dataFile);
+        return hasContentStats(dataFile) ? statsWrapper.wrap(dataFile) : null;
       }
 
       long recordCount = dataFile.recordCount();
