@@ -20,12 +20,22 @@ package org.apache.iceberg;
 
 import java.io.Serializable;
 import java.nio.ByteBuffer;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
+import org.apache.iceberg.relocated.com.google.common.collect.Sets;
+import org.apache.iceberg.types.Comparators;
+import org.apache.iceberg.types.Conversions;
+import org.apache.iceberg.types.Type;
 
-/** Adapts {@link TrackedFile} entries to their read APIs, for example {@link DataFile}. */
+/**
+ * Adapts between the {@link TrackedFile} model and the {@link DataFile} / {@link DeleteFile} /
+ * {@link ManifestFile} APIs in both directions.
+ */
 class TrackedFileAdapters {
 
   private TrackedFileAdapters() {}
@@ -53,6 +63,16 @@ class TrackedFileAdapters {
         "Invalid content type for ManifestFile: %s",
         file.contentType());
     return new TrackedManifestFile(file);
+  }
+
+  /** Returns a reusable adapter from {@link DataFile} to {@link TrackedFile}. */
+  static DataTrackedFile forDataFile(Schema tableSchema, Map<Integer, PartitionSpec> specsById) {
+    return new DataTrackedFile(tableSchema, specsById);
+  }
+
+  /** Returns a reusable adapter from {@link ManifestFile} to {@link TrackedFile}. */
+  static ManifestTrackedFile forManifestFile() {
+    return new ManifestTrackedFile();
   }
 
   /** Shared base for data and delete file adapters. */
@@ -378,6 +398,10 @@ class TrackedFileAdapters {
       this.file = file;
     }
 
+    private TrackedFile file() {
+      return file;
+    }
+
     @Override
     public String path() {
       return file.location();
@@ -453,6 +477,26 @@ class TrackedFileAdapters {
     }
 
     @Override
+    public Integer replacedFilesCount() {
+      return file.manifestInfo().replacedFilesCount();
+    }
+
+    @Override
+    public Long replacedRowsCount() {
+      return file.manifestInfo().replacedRowsCount();
+    }
+
+    @Override
+    public Integer modifiedFilesCount() {
+      return file.manifestInfo().modifiedFilesCount();
+    }
+
+    @Override
+    public Long modifiedRowsCount() {
+      return file.manifestInfo().modifiedRowsCount();
+    }
+
+    @Override
     public List<PartitionFieldSummary> partitions() {
       return null;
     }
@@ -481,6 +525,667 @@ class TrackedFileAdapters {
     public ManifestFile copy() {
       return new TrackedManifestFile(file.copy());
     }
+  }
+
+  /** Adapts a {@link DataFile} to {@link TrackedFile}. */
+  static class DataTrackedFile implements TrackedFile {
+    private final Schema tableSchema;
+    private final Map<Integer, PartitionSpec> specsById;
+    private final MapBackedContentStats statsWrapper;
+    private final WrappedEntryTracking trackingWrapper = new WrappedEntryTracking();
+
+    private Tracking tracking;
+    private DataFile file;
+    private ContentStats stats;
+
+    DataTrackedFile(Schema tableSchema, Map<Integer, PartitionSpec> specsById) {
+      Preconditions.checkArgument(specsById != null, "Invalid partition specs: null");
+      this.tableSchema = tableSchema;
+      this.specsById = specsById;
+      this.statsWrapper = new MapBackedContentStats(tableSchema);
+    }
+
+    /**
+     * Re-points this adapter at a {@link DataFile} from the public API. Tracking is unset.
+     *
+     * <p>Returns the inner {@link TrackedFile} when {@code newFile} is a {@link TrackedDataFile}.
+     */
+    public TrackedFile wrap(DataFile newFile) {
+      if (newFile instanceof TrackedDataFile tracked) {
+        return tracked.file();
+      }
+
+      wrapInternal(newFile);
+      this.tracking = null;
+      return this;
+    }
+
+    /**
+     * Re-points this adapter at a {@link ManifestEntry}. Converts the contained data file and the
+     * entry's tracking fields.
+     *
+     * <p>Returns the inner {@link TrackedFile} when the entry's file is a {@link TrackedDataFile}.
+     */
+    public TrackedFile wrap(ManifestEntry<DataFile> entry) {
+      Preconditions.checkArgument(entry != null, "Invalid entry: null");
+      if (entry.file() instanceof TrackedDataFile tracked) {
+        return tracked.file();
+      }
+
+      wrapInternal(entry.file());
+      this.tracking = trackingWrapper.wrap(entry);
+      return this;
+    }
+
+    private void wrapInternal(DataFile newFile) {
+      Preconditions.checkArgument(newFile != null, "Invalid file: null");
+      Preconditions.checkArgument(
+          newFile.content() == FileContent.DATA,
+          "Invalid content for data file: %s",
+          newFile.content());
+      PartitionSpec spec = specsById.get(newFile.specId());
+      Preconditions.checkArgument(
+          spec != null, "Cannot find partition spec for spec ID: %s", newFile.specId());
+
+      this.file = newFile;
+      this.stats = wrapStats(spec, newFile);
+    }
+
+    private ContentStats wrapStats(PartitionSpec spec, DataFile dataFile) {
+      Map<Integer, StatsUtil.SourceBounds> boundsBySourceId = Maps.newHashMap();
+      Set<Integer> nullSourceIds = Sets.newHashSet();
+      // TODO: field resolution and transform dispatch depend only on the spec; resolve them once
+      // per spec ID and apply per file instead of repeating them for every file
+      List<PartitionField> fields = spec.fields();
+      for (int pos = 0; pos < fields.size(); pos += 1) {
+        PartitionField field = fields.get(pos);
+        int sourceId = field.sourceId();
+        if (field.transform().isVoid() || tableSchema.findField(sourceId) == null) {
+          continue;
+        }
+
+        Object value = dataFile.partition().get(pos, Object.class);
+        if (value == null) {
+          nullSourceIds.add(sourceId);
+          continue;
+        }
+
+        // TODO: a NaN identity value means all values are NaN; report value, null, and NaN counts
+        StatsUtil.SourceBounds bounds =
+            StatsUtil.orderPreservingSourceBounds(tableSchema, field, value);
+        if (bounds != null) {
+          boundsBySourceId.merge(
+              sourceId, bounds, (left, right) -> intersect(sourceId, left, right));
+        }
+      }
+
+      if (boundsBySourceId.isEmpty() && nullSourceIds.isEmpty()) {
+        return hasContentStats(dataFile) ? statsWrapper.wrap(dataFile) : null;
+      }
+
+      long recordCount = dataFile.recordCount();
+      Map<Integer, Long> valueCounts = copyOf(dataFile.valueCounts());
+      Map<Integer, Long> nullValueCounts = copyOf(dataFile.nullValueCounts());
+      Map<Integer, ByteBuffer> lowerBounds = copyOf(dataFile.lowerBounds());
+      Map<Integer, ByteBuffer> upperBounds = copyOf(dataFile.upperBounds());
+
+      for (Map.Entry<Integer, StatsUtil.SourceBounds> entry : boundsBySourceId.entrySet()) {
+        int sourceId = entry.getKey();
+        valueCounts.put(sourceId, recordCount);
+        nullValueCounts.put(sourceId, 0L);
+        mergeBounds(sourceId, entry.getValue(), lowerBounds, upperBounds);
+      }
+
+      for (int sourceId : nullSourceIds) {
+        valueCounts.put(sourceId, recordCount);
+        nullValueCounts.put(sourceId, recordCount);
+        lowerBounds.remove(sourceId);
+        upperBounds.remove(sourceId);
+      }
+
+      return statsWrapper.wrap(
+          valueCounts,
+          nullValueCounts,
+          dataFile.nanValueCounts(),
+          dataFile.avgValueSizes(),
+          lowerBounds,
+          upperBounds);
+    }
+
+    private StatsUtil.SourceBounds intersect(
+        int sourceId, StatsUtil.SourceBounds left, StatsUtil.SourceBounds right) {
+      Comparator<Object> comparator = comparator(sourceId);
+      return new StatsUtil.SourceBounds(
+          max(comparator, left.lower(), right.lower()),
+          min(comparator, left.upper(), right.upper()));
+    }
+
+    private void mergeBounds(
+        int sourceId,
+        StatsUtil.SourceBounds bounds,
+        Map<Integer, ByteBuffer> lowerBounds,
+        Map<Integer, ByteBuffer> upperBounds) {
+      Type fieldType = tableSchema.findType(sourceId);
+      Comparator<Object> comparator = comparator(sourceId);
+      Object fileLower = Conversions.fromByteBuffer(fieldType, lowerBounds.get(sourceId));
+      Object fileUpper = Conversions.fromByteBuffer(fieldType, upperBounds.get(sourceId));
+      Object lower = max(comparator, bounds.lower(), fileLower);
+      Object upper = min(comparator, bounds.upper(), fileUpper);
+
+      // file bounds that do not overlap the partition are not valid, so use the partition bounds
+      if (lower != null && upper != null && comparator.compare(lower, upper) > 0) {
+        lower = bounds.lower();
+        upper = bounds.upper();
+      }
+
+      putBound(lowerBounds, sourceId, fieldType, lower);
+      putBound(upperBounds, sourceId, fieldType, upper);
+    }
+
+    private Comparator<Object> comparator(int sourceId) {
+      return Comparators.forType(tableSchema.findType(sourceId).asPrimitiveType());
+    }
+
+    @Override
+    public Tracking tracking() {
+      return tracking;
+    }
+
+    @Override
+    public FileContent contentType() {
+      return FileContent.DATA;
+    }
+
+    @Override
+    public String location() {
+      return file.location();
+    }
+
+    @Override
+    public FileFormat fileFormat() {
+      return file.format();
+    }
+
+    @Override
+    public long recordCount() {
+      return file.recordCount();
+    }
+
+    @Override
+    public long fileSizeInBytes() {
+      return file.fileSizeInBytes();
+    }
+
+    @Override
+    public Integer specId() {
+      // Files in one manifest may use different specs; this is the spec for this data file only.
+      return file.specId();
+    }
+
+    @Override
+    public StructLike partition() {
+      return file.partition();
+    }
+
+    @Override
+    public ContentStats contentStats() {
+      return stats;
+    }
+
+    @Override
+    public Integer sortOrderId() {
+      return file.sortOrderId();
+    }
+
+    @Override
+    public DeletionVector deletionVector() {
+      return file.deletionVector();
+    }
+
+    @Override
+    public ManifestInfo manifestInfo() {
+      return null;
+    }
+
+    @Override
+    public ByteBuffer keyMetadata() {
+      return file.keyMetadata();
+    }
+
+    @Override
+    public List<Long> splitOffsets() {
+      return file.splitOffsets();
+    }
+
+    @Override
+    public TrackedFile copy() {
+      throw new UnsupportedOperationException("copy is not implemented");
+    }
+
+    @Override
+    public TrackedFile copyWithStats(Set<Integer> requestedColumnIds) {
+      throw new UnsupportedOperationException("copy is not implemented");
+    }
+  }
+
+  /** Adapts a {@link ManifestFile} to {@link TrackedFile}. */
+  static class ManifestTrackedFile implements TrackedFile {
+    private final WrappedManifestInfo manifestInfo = new WrappedManifestInfo();
+    private final WrappedManifestTracking trackingWrapper = new WrappedManifestTracking();
+    private Tracking tracking;
+    private ManifestFile manifest;
+    private long recordCount;
+    private FileContent contentType;
+
+    ManifestTrackedFile() {}
+
+    /**
+     * Re-points this adapter at {@code newManifest}. Converts the manifest's own fields only;
+     * write-time tracking updates are applied by the versioned writer.
+     *
+     * <p>Returns the inner {@link TrackedFile} when {@code newManifest} is a {@link
+     * TrackedManifestFile}.
+     */
+    public TrackedFile wrap(ManifestFile newManifest) {
+      if (newManifest instanceof TrackedManifestFile tracked) {
+        return tracked.file();
+      }
+
+      Preconditions.checkArgument(newManifest != null, "Invalid manifest file: null");
+
+      this.manifest = newManifest;
+      this.contentType =
+          newManifest.content() == ManifestContent.DATA
+              ? FileContent.DATA_MANIFEST
+              : FileContent.DELETE_MANIFEST;
+      this.recordCount = manifestRecordCount(newManifest);
+      this.tracking = trackingWrapper.wrap(newManifest);
+      this.manifestInfo.wrap(newManifest);
+      return this;
+    }
+
+    @Override
+    public Tracking tracking() {
+      return tracking;
+    }
+
+    @Override
+    public FileContent contentType() {
+      return contentType;
+    }
+
+    @Override
+    public String location() {
+      return manifest.path();
+    }
+
+    @Override
+    public FileFormat fileFormat() {
+      // Manifest files before v4 are always Avro.
+      return FileFormat.AVRO;
+    }
+
+    @Override
+    public long recordCount() {
+      // Number of TrackedFile rows stored in the manifest.
+      return recordCount;
+    }
+
+    @Override
+    public long fileSizeInBytes() {
+      return manifest.length();
+    }
+
+    @Override
+    public Integer specId() {
+      // Spec the wrapped manifest was written with. Data file entries in a v4 manifest file may
+      // use different specs.
+      return manifest.partitionSpecId();
+    }
+
+    @Override
+    public StructLike partition() {
+      return null;
+    }
+
+    @Override
+    public ContentStats contentStats() {
+      return null;
+    }
+
+    @Override
+    public Integer sortOrderId() {
+      // Manifests have no table sort order.
+      return null;
+    }
+
+    @Override
+    public DeletionVector deletionVector() {
+      return null;
+    }
+
+    @Override
+    public ManifestInfo manifestInfo() {
+      return manifestInfo;
+    }
+
+    @Override
+    public ByteBuffer keyMetadata() {
+      return manifest.keyMetadata();
+    }
+
+    @Override
+    public List<Long> splitOffsets() {
+      return null;
+    }
+
+    @Override
+    public TrackedFile copy() {
+      throw new UnsupportedOperationException("copy is not implemented");
+    }
+
+    @Override
+    public TrackedFile copyWithStats(Set<Integer> requestedColumnIds) {
+      throw new UnsupportedOperationException("copy is not implemented");
+    }
+  }
+
+  /** Reusable {@link ManifestInfo} view over a {@link ManifestFile}'s counts. */
+  private static class WrappedManifestInfo implements ManifestInfo {
+    private ManifestFile manifest = null;
+
+    WrappedManifestInfo wrap(ManifestFile newManifest) {
+      this.manifest = newManifest;
+      return this;
+    }
+
+    @Override
+    public int addedFilesCount() {
+      return manifest.addedFilesCount();
+    }
+
+    @Override
+    public int existingFilesCount() {
+      return manifest.existingFilesCount();
+    }
+
+    @Override
+    public int deletedFilesCount() {
+      return manifest.deletedFilesCount();
+    }
+
+    @Override
+    public int replacedFilesCount() {
+      return manifest.replacedFilesCount();
+    }
+
+    @Override
+    public int modifiedFilesCount() {
+      return manifest.modifiedFilesCount();
+    }
+
+    @Override
+    public long addedRowsCount() {
+      return manifest.addedRowsCount();
+    }
+
+    @Override
+    public long existingRowsCount() {
+      return manifest.existingRowsCount();
+    }
+
+    @Override
+    public long deletedRowsCount() {
+      return manifest.deletedRowsCount();
+    }
+
+    @Override
+    public long replacedRowsCount() {
+      return manifest.replacedRowsCount();
+    }
+
+    @Override
+    public long modifiedRowsCount() {
+      return manifest.modifiedRowsCount();
+    }
+
+    @Override
+    public long minSequenceNumber() {
+      return manifest.minSequenceNumber();
+    }
+
+    @Override
+    public ManifestBitmap manifestDeletionVector() {
+      return manifest.manifestDeletionVector();
+    }
+
+    @Override
+    public int formatVersion() {
+      return manifest.formatVersion();
+    }
+
+    @Override
+    public ManifestInfo copy() {
+      throw new UnsupportedOperationException("copy is not implemented");
+    }
+  }
+
+  private static class WrappedEntryTracking implements Tracking {
+    private ManifestEntry<DataFile> entry = null;
+
+    WrappedEntryTracking wrap(ManifestEntry<DataFile> newEntry) {
+      this.entry = newEntry;
+      return this;
+    }
+
+    @Override
+    public EntryStatus status() {
+      return entryStatus(entry.status());
+    }
+
+    @Override
+    public Long snapshotId() {
+      return entry.snapshotId();
+    }
+
+    @Override
+    public Long dataSequenceNumber() {
+      return entry.dataSequenceNumber();
+    }
+
+    @Override
+    public Long fileSequenceNumber() {
+      return entry.fileSequenceNumber();
+    }
+
+    @Override
+    public Long modifiedSnapshotId() {
+      return null;
+    }
+
+    @Override
+    public Long firstRowId() {
+      return entry.file().firstRowId();
+    }
+
+    @Override
+    public ByteBuffer deletedPositions() {
+      return null;
+    }
+
+    @Override
+    public ByteBuffer replacedPositions() {
+      return null;
+    }
+
+    @Override
+    public String manifestLocation() {
+      return entry.file().manifestLocation();
+    }
+
+    @Override
+    public long manifestPos() {
+      Long pos = entry.file().pos();
+      return pos != null ? pos : -1L;
+    }
+
+    @Override
+    public Tracking copy() {
+      throw new UnsupportedOperationException("copy is not implemented");
+    }
+  }
+
+  private static class WrappedManifestTracking implements Tracking {
+    private ManifestFile manifest = null;
+
+    WrappedManifestTracking wrap(ManifestFile newManifest) {
+      this.manifest = newManifest;
+      return this;
+    }
+
+    @Override
+    public EntryStatus status() {
+      // Pre-v4 manifests have no status and are live; the writer sets EXISTING or MODIFIED.
+      return EntryStatus.EXISTING;
+    }
+
+    @Override
+    public Long snapshotId() {
+      return manifest.snapshotId();
+    }
+
+    @Override
+    public Long dataSequenceNumber() {
+      return manifest.sequenceNumber();
+    }
+
+    @Override
+    public Long fileSequenceNumber() {
+      return manifest.sequenceNumber();
+    }
+
+    @Override
+    public Long modifiedSnapshotId() {
+      return null;
+    }
+
+    @Override
+    public Long firstRowId() {
+      return manifest.firstRowId();
+    }
+
+    @Override
+    public ByteBuffer deletedPositions() {
+      return null;
+    }
+
+    @Override
+    public ByteBuffer replacedPositions() {
+      return null;
+    }
+
+    @Override
+    public String manifestLocation() {
+      return null;
+    }
+
+    @Override
+    public long manifestPos() {
+      return -1L;
+    }
+
+    @Override
+    public Tracking copy() {
+      throw new UnsupportedOperationException("copy is not implemented");
+    }
+  }
+
+  private static EntryStatus entryStatus(ManifestEntry.Status status) {
+    return switch (status) {
+      case EXISTING -> EntryStatus.EXISTING;
+      case ADDED -> EntryStatus.ADDED;
+      case DELETED -> EntryStatus.DELETED;
+    };
+  }
+
+  private static boolean hasContentStats(ContentFile<?> file) {
+    return isPresent(file.valueCounts())
+        || isPresent(file.nullValueCounts())
+        || isPresent(file.nanValueCounts())
+        || isPresent(file.totalBytes())
+        || isPresent(file.lowerBounds())
+        || isPresent(file.upperBounds());
+  }
+
+  private static boolean isPresent(Map<?, ?> map) {
+    return map != null && !map.isEmpty();
+  }
+
+  private static <V> Map<Integer, V> copyOf(Map<Integer, V> map) {
+    return map != null ? Maps.newHashMap(map) : Maps.newHashMap();
+  }
+
+  private static void putBound(
+      Map<Integer, ByteBuffer> bounds, int fieldId, Type fieldType, Object value) {
+    if (value != null) {
+      bounds.put(fieldId, Conversions.toByteBuffer(fieldType, value));
+    } else {
+      bounds.remove(fieldId);
+    }
+  }
+
+  private static Object max(Comparator<Object> comparator, Object left, Object right) {
+    if (left == null) {
+      return right;
+    } else if (right == null) {
+      return left;
+    }
+
+    return comparator.compare(left, right) >= 0 ? left : right;
+  }
+
+  private static Object min(Comparator<Object> comparator, Object left, Object right) {
+    if (left == null) {
+      return right;
+    } else if (right == null) {
+      return left;
+    }
+
+    return comparator.compare(left, right) <= 0 ? left : right;
+  }
+
+  /**
+   * Record count of a manifest is the number of TrackedFile rows it stores: the sum of per-status
+   * file counts. Missing counts fail rather than producing an incorrect total.
+   */
+  private static long manifestRecordCount(ManifestFile manifest) {
+    Preconditions.checkNotNull(
+        manifest.addedFilesCount(),
+        "Cannot convert manifest %s: missing added files count",
+        manifest.path());
+    Preconditions.checkNotNull(
+        manifest.existingFilesCount(),
+        "Cannot convert manifest %s: missing existing files count",
+        manifest.path());
+    Preconditions.checkNotNull(
+        manifest.deletedFilesCount(),
+        "Cannot convert manifest %s: missing deleted files count",
+        manifest.path());
+    Preconditions.checkArgument(
+        Objects.equals(manifest.replacedFilesCount(), 0),
+        "Cannot convert manifest %s: Invalid replaced file count: %s",
+        manifest.path(),
+        manifest.replacedFilesCount());
+    Preconditions.checkArgument(
+        Objects.equals(manifest.modifiedFilesCount(), 0),
+        "Cannot convert manifest %s: Invalid modified file count: %s",
+        manifest.path(),
+        manifest.modifiedFilesCount());
+    return (long) manifest.addedFilesCount()
+        + manifest.existingFilesCount()
+        + manifest.deletedFilesCount()
+        + manifest.replacedFilesCount()
+        + manifest.modifiedFilesCount();
   }
 
   private static int resolveSpecId(TrackedFile file, Map<Integer, PartitionSpec> specsById) {
