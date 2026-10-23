@@ -19,21 +19,29 @@
 package org.apache.iceberg;
 
 import java.nio.ByteBuffer;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Iterables;
+import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.relocated.com.google.common.collect.Sets;
+import org.apache.iceberg.types.Comparators;
 import org.apache.iceberg.types.Conversions;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
 
-/** Reusable {@link ContentStats} view over a {@link ContentFile}'s stat maps. */
+/**
+ * Reusable {@link ContentStats} view over a {@link ContentFile}'s stat maps and partition values.
+ */
 class MapBackedContentStats implements ContentStats {
   private final Schema tableSchema;
   private final Map<Integer, FieldStats<?>> statsById = Maps.newHashMap();
+  private final Map<Integer, PartitionStats> partitionStatsById = Maps.newHashMap();
 
   private Types.StructType type;
   private Map<Integer, Long> valueCounts;
@@ -42,6 +50,9 @@ class MapBackedContentStats implements ContentStats {
   private Map<Integer, Integer> avgValueSizes;
   private Map<Integer, ByteBuffer> lowerBounds;
   private Map<Integer, ByteBuffer> upperBounds;
+  private PartitionStatsPlan plan = PartitionStatsPlan.EMPTY;
+  private StructLike partition;
+  private long recordCount;
 
   MapBackedContentStats(Schema tableSchema) {
     Preconditions.checkArgument(tableSchema != null, "Invalid table schema: null");
@@ -49,29 +60,23 @@ class MapBackedContentStats implements ContentStats {
   }
 
   MapBackedContentStats wrap(ContentFile<?> file) {
-    return wrap(
-        file.valueCounts(),
-        file.nullValueCounts(),
-        file.nanValueCounts(),
-        file.avgValueSizes(),
-        file.lowerBounds(),
-        file.upperBounds());
+    return wrap(file, PartitionStatsPlan.EMPTY);
   }
 
-  MapBackedContentStats wrap(
-      Map<Integer, Long> newValueCounts,
-      Map<Integer, Long> newNullValueCounts,
-      Map<Integer, Long> newNanValueCounts,
-      Map<Integer, Integer> newAvgValueSizes,
-      Map<Integer, ByteBuffer> newLowerBounds,
-      Map<Integer, ByteBuffer> newUpperBounds) {
-    this.valueCounts = newValueCounts;
-    this.nullValueCounts = newNullValueCounts;
-    this.nanValueCounts = newNanValueCounts;
-    this.avgValueSizes = newAvgValueSizes;
-    this.lowerBounds = newLowerBounds;
-    this.upperBounds = newUpperBounds;
+  MapBackedContentStats wrap(ContentFile<?> file, PartitionStatsPlan newPlan) {
+    this.valueCounts = file.valueCounts();
+    this.nullValueCounts = file.nullValueCounts();
+    this.nanValueCounts = file.nanValueCounts();
+    this.avgValueSizes = file.avgValueSizes();
+    this.lowerBounds = file.lowerBounds();
+    this.upperBounds = file.upperBounds();
+    // partition values are read when stats are first read, so the file's partition tuple must not
+    // change until then
+    this.partition = file.partition();
+    this.recordCount = file.recordCount();
+    this.plan = newPlan;
     this.type = null;
+    partitionStatsById.clear();
     return this;
   }
 
@@ -84,8 +89,8 @@ class MapBackedContentStats implements ContentStats {
   @SuppressWarnings("unchecked")
   public <T> FieldStats<T> statsFor(int fieldId) {
     // Schema is fixed for this instance; wrap() rebinds the metric maps. An id absent
-    // from the current maps is left uncached so a later file can still surface it.
-    if (!containsFieldInMaps(fieldId)) {
+    // from the current file is left uncached so a later file can still surface it.
+    if (!hasStats(fieldId)) {
       return null;
     }
 
@@ -134,8 +139,9 @@ class MapBackedContentStats implements ContentStats {
     throw new UnsupportedOperationException("copy is not implemented");
   }
 
-  private boolean containsFieldInMaps(int fieldId) {
-    return containsId(valueCounts, fieldId)
+  private boolean hasStats(int fieldId) {
+    return plan.columnsById.containsKey(fieldId)
+        || containsId(valueCounts, fieldId)
         || containsId(nullValueCounts, fieldId)
         || containsId(nanValueCounts, fieldId)
         || containsId(avgValueSizes, fieldId)
@@ -146,6 +152,7 @@ class MapBackedContentStats implements ContentStats {
   private Set<Integer> statsFieldIds() {
     Set<Integer> ids =
         Sets.newHashSetWithExpectedSize(valueCounts == null ? 0 : valueCounts.size());
+    ids.addAll(plan.columnsById.keySet());
     addKeys(ids, valueCounts);
     addKeys(ids, nullValueCounts);
     addKeys(ids, nanValueCounts);
@@ -153,6 +160,95 @@ class MapBackedContentStats implements ContentStats {
     addKeys(ids, lowerBounds);
     addKeys(ids, upperBounds);
     return ids;
+  }
+
+  private PartitionStats partitionStats(int fieldId) {
+    SourceColumn column = plan.columnsById.get(fieldId);
+    if (column == null) {
+      return null;
+    }
+
+    PartitionStats stats = partitionStatsById.get(fieldId);
+    if (stats == null) {
+      stats = derivePartitionStats(fieldId, column);
+      partitionStatsById.put(fieldId, stats);
+    }
+
+    return stats;
+  }
+
+  private PartitionStats derivePartitionStats(int fieldId, SourceColumn column) {
+    Object recordedLower = decode(column.type(), lowerBounds, fieldId);
+    Object recordedUpper = decode(column.type(), upperBounds, fieldId);
+    Comparator<Object> comparator = column.comparator();
+    boolean hasRange = false;
+    Object lower = null;
+    Object upper = null;
+    for (int i = 0; i < column.positions().size(); i += 1) {
+      Object value = partition.get(column.positions().get(i), Object.class);
+      if (value == null) {
+        // a null partition value means every source value in the file is null
+        return new PartitionStats(recordCount, recordCount, null, null);
+      }
+
+      // keep the range that fits every partition field on this column, where a null upper has no
+      // limit and a NaN identity value has no range
+      StatsUtil.PartitionSourceBounds bounds =
+          StatsUtil.sourceBoundsFor(tableSchema, column.fields().get(i), value);
+      if (bounds != null) {
+        hasRange = true;
+        lower = max(comparator, lower, bounds.lower());
+        upper = min(comparator, upper, bounds.upper());
+      }
+    }
+
+    if (!hasRange) {
+      return new PartitionStats(
+          count(valueCounts, fieldId),
+          count(nullValueCounts, fieldId),
+          recordedLower,
+          recordedUpper);
+    }
+
+    lower = max(comparator, lower, recordedLower);
+    upper = min(comparator, upper, recordedUpper);
+    if (lower != null && upper != null && comparator.compare(lower, upper) > 0) {
+      // the ranges can only miss each other when a partition-derived range is wrong, such as after
+      // integer overflow in truncate, so keep the file's recorded column bounds
+      lower = recordedLower;
+      upper = recordedUpper;
+    }
+
+    // a non-null partition value means every source value in the file is non-null
+    return new PartitionStats(recordCount, 0L, lower, upper);
+  }
+
+  private static Object decode(Type type, Map<Integer, ByteBuffer> bounds, int fieldId) {
+    return bounds == null ? null : Conversions.fromByteBuffer(type, bounds.get(fieldId));
+  }
+
+  private static Long count(Map<Integer, Long> counts, int fieldId) {
+    return counts == null ? null : counts.get(fieldId);
+  }
+
+  private static Object max(Comparator<Object> comparator, Object left, Object right) {
+    if (left == null) {
+      return right;
+    } else if (right == null) {
+      return left;
+    }
+
+    return comparator.compare(left, right) >= 0 ? left : right;
+  }
+
+  private static Object min(Comparator<Object> comparator, Object left, Object right) {
+    if (left == null) {
+      return right;
+    } else if (right == null) {
+      return left;
+    }
+
+    return comparator.compare(left, right) <= 0 ? left : right;
   }
 
   private static void addKeys(Set<Integer> ids, Map<Integer, ?> map) {
@@ -190,22 +286,25 @@ class MapBackedContentStats implements ContentStats {
     }
 
     @Override
-    public T lowerBound() {
-      return decodeBound(lowerBounds);
-    }
-
-    @Override
-    public T upperBound() {
-      return decodeBound(upperBounds);
-    }
-
     @SuppressWarnings("unchecked")
-    private T decodeBound(Map<Integer, ByteBuffer> bounds) {
-      if (boundType == null || bounds == null) {
+    public T lowerBound() {
+      if (boundType == null) {
         return null;
       }
 
-      return (T) Conversions.fromByteBuffer(fieldType, bounds.get(fieldId));
+      PartitionStats stats = partitionStats(fieldId);
+      return (T) (stats != null ? stats.lowerBound() : decode(fieldType, lowerBounds, fieldId));
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public T upperBound() {
+      if (boundType == null) {
+        return null;
+      }
+
+      PartitionStats stats = partitionStats(fieldId);
+      return (T) (stats != null ? stats.upperBound() : decode(fieldType, upperBounds, fieldId));
     }
 
     @Override
@@ -215,32 +314,32 @@ class MapBackedContentStats implements ContentStats {
 
     @Override
     public boolean hasValueCount() {
-      return count(valueCounts) != null;
+      return valueCountOrNull() != null;
     }
 
     @Override
     public long valueCount() {
-      return count(valueCounts);
+      return valueCountOrNull();
     }
 
     @Override
     public boolean hasNullValueCount() {
-      return count(nullValueCounts) != null;
+      return nullValueCountOrNull() != null;
     }
 
     @Override
     public long nullValueCount() {
-      return count(nullValueCounts);
+      return nullValueCountOrNull();
     }
 
     @Override
     public boolean hasNanValueCount() {
-      return count(nanValueCounts) != null;
+      return count(nanValueCounts, fieldId) != null;
     }
 
     @Override
     public long nanValueCount() {
-      return count(nanValueCounts);
+      return count(nanValueCounts, fieldId);
     }
 
     @Override
@@ -253,8 +352,68 @@ class MapBackedContentStats implements ContentStats {
       throw new UnsupportedOperationException("copy is not implemented");
     }
 
-    private Long count(Map<Integer, Long> counts) {
-      return counts == null ? null : counts.get(fieldId);
+    private Long valueCountOrNull() {
+      PartitionStats stats = partitionStats(fieldId);
+      return stats != null ? stats.valueCount() : count(valueCounts, fieldId);
+    }
+
+    private Long nullValueCountOrNull() {
+      PartitionStats stats = partitionStats(fieldId);
+      return stats != null ? stats.nullValueCount() : count(nullValueCounts, fieldId);
+    }
+  }
+
+  private record PartitionStats(
+      Long valueCount, Long nullValueCount, Object lowerBound, Object upperBound) {}
+
+  private record SourceColumn(
+      Type type,
+      Comparator<Object> comparator,
+      List<Integer> positions,
+      List<PartitionField> fields) {}
+
+  /** The partition fields of a spec whose values can fill in stats for their source columns. */
+  static class PartitionStatsPlan {
+    static final PartitionStatsPlan EMPTY = new PartitionStatsPlan(ImmutableMap.of());
+
+    private final Map<Integer, SourceColumn> columnsById;
+
+    private PartitionStatsPlan(Map<Integer, SourceColumn> columnsById) {
+      this.columnsById = columnsById;
+    }
+
+    static PartitionStatsPlan of(Schema tableSchema, PartitionSpec spec) {
+      Map<Integer, List<Integer>> positionsById = Maps.newLinkedHashMap();
+      List<PartitionField> fields = spec.fields();
+      for (int pos = 0; pos < fields.size(); pos += 1) {
+        // skip transforms that do not preserve order, such as bucket and void, and source columns
+        // that are not in the table schema
+        PartitionField field = fields.get(pos);
+        int sourceId = field.sourceId();
+        if (field.transform().preservesOrder() && tableSchema.findField(sourceId) != null) {
+          positionsById.computeIfAbsent(sourceId, id -> Lists.newArrayList()).add(pos);
+        }
+      }
+
+      ImmutableMap.Builder<Integer, SourceColumn> columns = ImmutableMap.builder();
+      positionsById.forEach(
+          (sourceId, positions) -> {
+            Type type = tableSchema.findType(sourceId);
+            List<PartitionField> sourceFields = positions.stream().map(fields::get).toList();
+            columns.put(
+                sourceId,
+                new SourceColumn(
+                    type,
+                    Comparators.forType(type.asPrimitiveType()),
+                    List.copyOf(positions),
+                    sourceFields));
+          });
+
+      return new PartitionStatsPlan(columns.build());
+    }
+
+    boolean isEmpty() {
+      return columnsById.isEmpty();
     }
   }
 }

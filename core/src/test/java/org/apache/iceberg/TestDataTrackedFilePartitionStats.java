@@ -26,6 +26,7 @@ import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.iceberg.types.Comparators;
 import org.apache.iceberg.types.Conversions;
 import org.apache.iceberg.types.Type;
@@ -160,6 +161,20 @@ class TestDataTrackedFilePartitionStats {
   }
 
   @Test
+  void nonOverlappingPartitionFieldsOnTheSameSourceColumnGiveNoBounds() {
+    PartitionSpec spec =
+        PartitionSpec.builderFor(SCHEMA)
+            .truncate("category", 2, "category_2")
+            .truncate("category", 4, "category_4")
+            .build();
+
+    FieldStats<?> category = wrap(spec, file(spec, noMetrics(), "bo", "musi")).statsFor(CATEGORY);
+
+    assertThat(category.lowerBound()).isNull();
+    assertThat(category.upperBound()).isNull();
+  }
+
+  @Test
   void columnsWithoutPartitionFieldsKeepFileStats() {
     PartitionSpec spec = PartitionSpec.builderFor(SCHEMA).identity("category").build();
     Types.IntegerType intType = Types.IntegerType.get();
@@ -244,6 +259,27 @@ class TestDataTrackedFilePartitionStats {
     assertThat(allNull.nullValueCount()).isEqualTo(RECORD_COUNT);
   }
 
+  @Test
+  void partitionValuesAreNotReadUntilAPartitionSourceColumnIsRead() {
+    PartitionSpec spec = PartitionSpec.builderFor(SCHEMA).identity("category").build();
+    AtomicInteger reads = new AtomicInteger();
+    PartitionData partition =
+        new PartitionData(spec.partitionType()) {
+          @Override
+          public <T> T get(int pos, Class<T> javaClass) {
+            reads.incrementAndGet();
+            return super.get(pos, javaClass);
+          }
+        };
+    partition.set(0, "books");
+
+    ContentStats stats = wrap(spec, file(spec, partition, noMetrics()));
+    assertThat(reads).hasValue(0);
+
+    stats.statsFor(CATEGORY).lowerBound();
+    assertThat(reads).hasPositiveValue();
+  }
+
   private static ContentStats wrap(PartitionSpec spec, DataFile file) {
     return TrackedFileAdapters.forDataFile(SCHEMA, Map.of(spec.specId(), spec))
         .wrap(file)
@@ -256,6 +292,10 @@ class TestDataTrackedFilePartitionStats {
       partition.set(pos, values[pos]);
     }
 
+    return file(spec, partition, metrics);
+  }
+
+  private static DataFile file(PartitionSpec spec, PartitionData partition, Metrics metrics) {
     return new GenericDataFile(
         spec.specId(),
         "s3://bucket/data/file.parquet",
