@@ -129,11 +129,6 @@ class StatsTestUtil {
     }
 
     @Override
-    public boolean tightBounds() {
-      return false;
-    }
-
-    @Override
     public boolean hasValueCount() {
       return valueCount != null;
     }

@@ -165,8 +165,7 @@ class V4TestComparators {
       comparator =
           comparator
               .thenComparing(FieldStats::lowerBound, comparator(type))
-              .thenComparing(FieldStats::upperBound, comparator(type))
-              .thenComparing(FieldStats::tightBounds);
+              .thenComparing(FieldStats::upperBound, comparator(type));
 
       if (type.typeId() == Type.TypeID.FLOAT || type.typeId() == Type.TypeID.DOUBLE) {
         comparator =

@@ -55,6 +55,7 @@ class TrackedFileStruct extends SupportsIndexProjection implements TrackedFile, 
               TrackedFile.CONTENT_STATS_NAME,
               EMPTY_STRUCT_TYPE,
               TrackedFile.CONTENT_STATS_DOC),
+          TrackedFile.TIGHT_STATS,
           TrackedFile.SORT_ORDER_ID,
           TrackedFile.DELETION_VECTOR,
           TrackedFile.MANIFEST_INFO,
@@ -72,6 +73,7 @@ class TrackedFileStruct extends SupportsIndexProjection implements TrackedFile, 
   // optional fields
   private Integer specId = null;
   private ContentStats contentStats = null;
+  private Boolean tightStats = null;
   private Integer sortOrderId = null;
   private DeletionVector deletionVector = null;
   private ManifestInfo manifestInfo = null;
@@ -133,6 +135,7 @@ class TrackedFileStruct extends SupportsIndexProjection implements TrackedFile, 
     this.specId = toCopy.specId;
     this.partition = toCopy.partition == null ? null : StructLikeUtil.copy(toCopy.partition());
     this.tracking = toCopy.tracking != null ? toCopy.tracking.copy() : null;
+    this.tightStats = toCopy.tightStats;
     this.sortOrderId = toCopy.sortOrderId;
     this.deletionVector = toCopy.deletionVector != null ? toCopy.deletionVector.copy() : null;
 
@@ -220,6 +223,11 @@ class TrackedFileStruct extends SupportsIndexProjection implements TrackedFile, 
   }
 
   @Override
+  public Boolean tightStats() {
+    return tightStats;
+  }
+
+  @Override
   public Integer sortOrderId() {
     return sortOrderId;
   }
@@ -270,11 +278,12 @@ class TrackedFileStruct extends SupportsIndexProjection implements TrackedFile, 
       case 6 -> specId;
       case 7 -> partition;
       case 8 -> contentStats;
-      case 9 -> sortOrderId;
-      case 10 -> deletionVector;
-      case 11 -> manifestInfo;
-      case 12 -> keyMetadata();
-      case 13 -> splitOffsets();
+      case 9 -> tightStats;
+      case 10 -> sortOrderId;
+      case 11 -> deletionVector;
+      case 12 -> manifestInfo;
+      case 13 -> keyMetadata();
+      case 14 -> splitOffsets();
       default -> throw new UnsupportedOperationException("Unknown field ordinal: " + pos);
     };
   }
@@ -293,11 +302,12 @@ class TrackedFileStruct extends SupportsIndexProjection implements TrackedFile, 
       case 6 -> this.specId = (Integer) value;
       case 7 -> this.partition = (StructLike) value;
       case 8 -> this.contentStats = (ContentStats) value;
-      case 9 -> this.sortOrderId = (Integer) value;
-      case 10 -> this.deletionVector = (DeletionVector) value;
-      case 11 -> this.manifestInfo = (ManifestInfo) value;
-      case 12 -> this.keyMetadata = ByteBuffers.toByteArray((ByteBuffer) value);
-      case 13 -> this.splitOffsets = ArrayUtil.toLongArray((List<Long>) value);
+      case 9 -> this.tightStats = (Boolean) value;
+      case 10 -> this.sortOrderId = (Integer) value;
+      case 11 -> this.deletionVector = (DeletionVector) value;
+      case 12 -> this.manifestInfo = (ManifestInfo) value;
+      case 13 -> this.keyMetadata = ByteBuffers.toByteArray((ByteBuffer) value);
+      case 14 -> this.splitOffsets = ArrayUtil.toLongArray((List<Long>) value);
       default -> {
         // ignore the object, it must be from a newer version of the format
       }
@@ -316,6 +326,7 @@ class TrackedFileStruct extends SupportsIndexProjection implements TrackedFile, 
         .add("partition", partition)
         .add("tracking", tracking)
         .add("content_stats", contentStats)
+        .add("tight_stats", tightStats)
         .add("sort_order_id", sortOrderId)
         .add("deletion_vector", deletionVector)
         .add("manifest_info", manifestInfo)

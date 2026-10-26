@@ -63,6 +63,12 @@ interface TrackedFile {
   String CONTENT_STATS_NAME = "content_stats";
   String CONTENT_STATS_DOC = "Content statistics for this entry";
 
+  Types.NestedField TIGHT_STATS =
+      Types.NestedField.optional(
+          151,
+          "tight_stats",
+          Types.BooleanType.get(),
+          "When true, the file's content_stats are tight");
   Types.NestedField SORT_ORDER_ID =
       Types.NestedField.optional(
           140, "sort_order_id", Types.IntegerType.get(), "ID of the sort order for this file");
@@ -105,6 +111,7 @@ interface TrackedFile {
             CONTENT_STATS_NAME,
             typeOrUnknown(contentStatsType),
             CONTENT_STATS_DOC),
+        TIGHT_STATS,
         SORT_ORDER_ID,
         DELETION_VECTOR,
         MANIFEST_INFO,
@@ -162,6 +169,13 @@ interface TrackedFile {
 
   /** Returns the content stats for this entry. */
   ContentStats contentStats();
+
+  /**
+   * Returns true when the file's content stats are tight, or null if unknown.
+   *
+   * <p>When null, readers must assume stats are not tight.
+   */
+  Boolean tightStats();
 
   /** Returns the ID of the sort order for this file, or null. */
   Integer sortOrderId();

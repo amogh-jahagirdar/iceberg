@@ -715,6 +715,12 @@ class TrackedFileAdapters {
     }
 
     @Override
+    public Boolean tightStats() {
+      // Stats for newly added files are tight.
+      return tracking != null && tracking.status() == EntryStatus.ADDED ? true : null;
+    }
+
+    @Override
     public Integer sortOrderId() {
       return file.sortOrderId();
     }
@@ -832,6 +838,11 @@ class TrackedFileAdapters {
 
     @Override
     public ContentStats contentStats() {
+      return null;
+    }
+
+    @Override
+    public Boolean tightStats() {
       return null;
     }
 

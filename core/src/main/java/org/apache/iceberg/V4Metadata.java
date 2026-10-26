@@ -646,13 +646,23 @@ class V4Metadata {
         case 6 -> isPartitioned ? file.specId() : null;
         case 7 -> isPartitioned ? file.partition() : null;
         case 8 -> contentStats(file);
-        case 9 -> file.sortOrderId();
-        case 10 -> file.deletionVector();
-        case 11 -> null;
-        case 12 -> file.keyMetadata();
-        case 13 -> file.splitOffsets();
+        case 9 -> tightStats();
+        case 10 -> file.sortOrderId();
+        case 11 -> file.deletionVector();
+        case 12 -> null;
+        case 13 -> file.keyMetadata();
+        case 14 -> file.splitOffsets();
         default -> throw new UnsupportedOperationException("Unknown field ordinal: " + pos);
       };
+    }
+
+    private Boolean tightStats() {
+      if (wrapped.status() == Status.ADDED) {
+        // stats for newly added files are tight
+        return true;
+      }
+
+      return null;
     }
 
     private Tracking tracking() {
