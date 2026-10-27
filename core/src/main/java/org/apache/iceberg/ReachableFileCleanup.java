@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 import org.apache.iceberg.exceptions.RuntimeIOException;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.io.FileIO;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.util.Tasks;
 import org.slf4j.Logger;
@@ -76,7 +77,7 @@ class ReachableFileCleanup extends FileCleanupStrategy {
     Map<String, ManifestFile> deletionCandidates = readManifests(expiredSnapshots);
 
     if (!deletionCandidates.isEmpty()) {
-      Map<String, ManifestFile> currentManifests = new ConcurrentHashMap<>();
+      Map<String, ManifestFile> currentManifests = Maps.newConcurrentMap();
       Collection<ManifestFile> manifestsToDelete =
           pruneReferencedManifests(
               snapshotsAfterExpiration,
@@ -114,7 +115,8 @@ class ReachableFileCleanup extends FileCleanupStrategy {
       Set<Snapshot> snapshots,
       Map<String, ManifestFile> deletionCandidates,
       Consumer<ManifestFile> currentManifestCallback) {
-    Map<String, ManifestFile> candidates = new ConcurrentHashMap<>(deletionCandidates);
+    Map<String, ManifestFile> candidates = Maps.newConcurrentMap();
+    candidates.putAll(deletionCandidates);
     Tasks.foreach(snapshots)
         .retry(3)
         .stopOnFailure()
@@ -145,7 +147,7 @@ class ReachableFileCleanup extends FileCleanupStrategy {
   }
 
   private Map<String, ManifestFile> readManifests(Set<Snapshot> snapshots) {
-    Map<String, ManifestFile> manifestFiles = new ConcurrentHashMap<>();
+    Map<String, ManifestFile> manifestFiles = Maps.newConcurrentMap();
     Tasks.foreach(snapshots)
         .retry(3)
         .stopOnFailure()
