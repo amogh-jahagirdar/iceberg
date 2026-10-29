@@ -533,7 +533,7 @@ class V4Metadata {
         case 1:
           return wrapped.location();
         case 2:
-          return wrapped.format() != null ? wrapped.format().toString() : null;
+          return wrapped.format() != null ? wrapped.format().lowerCaseName() : null;
         case 3:
           return wrapped.partition();
         case 4:
@@ -640,7 +640,7 @@ class V4Metadata {
         case 0 -> tracking();
         case 1 -> file.content().id();
         case 2 -> file.location();
-        case 3 -> file.format().toString();
+        case 3 -> file.format().lowerCaseName();
         case 4 -> file.recordCount();
         case 5 -> file.fileSizeInBytes();
         case 6 -> isPartitioned ? file.specId() : null;
