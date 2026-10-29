@@ -32,12 +32,18 @@ public enum FileFormat {
 
   private final String ext;
   private final boolean splittable;
+  private final String lowerCaseName;
 
   private static final FileFormat[] VALUES = values();
 
   FileFormat(String ext, boolean splittable) {
     this.ext = "." + ext;
     this.splittable = splittable;
+    this.lowerCaseName = name().toLowerCase(Locale.ROOT);
+  }
+
+  public String lowerCaseName() {
+    return lowerCaseName;
   }
 
   public boolean isSplittable() {
